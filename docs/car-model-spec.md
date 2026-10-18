@@ -2,7 +2,7 @@
 
 What a car `.glb` has to look like so it can replace the current one by changing only the asset path. The car's look comes from this file; its physics never does. The collider, wheel positions, wheel radius and suspension all live in `TUNING.car` (`src/config/tuning.ts`), and the model is built to match them.
 
-The placeholder `public/models/car.glb` follows this spec. It is generated from a Kenney Car Kit car (see [Placeholder](#placeholder)).
+`public/models/car.glb` follows this spec. It is generated from the hero Roadster model (see [Hero model](#hero-model)); the M9 Kenney placeholder can still be built as a [fallback](#fallback).
 
 ## File
 
@@ -15,7 +15,7 @@ The placeholder `public/models/car.glb` follows this spec. It is generated from 
 - **Metres.** Scale 1 in the file; don't rely on a runtime scale.
 - **+Y up, +Z forward.** This is glTF's own convention, so **+X is the car's left**.
 - **In Blender** (Z up): model the car with its front facing **−Y**, apply all transforms, and export glTF with the default _+Y Up_. Blender's −Y becomes glTF's +Z.
-- **Origin = the centre of the physics chassis box**, a `TUNING.car.chassis.halfExtents` box (currently 1.8 × 0.6 × 4.0 m). The bodywork may stick out past the box, but anything far outside it will visibly pass through walls.
+- **Origin = the centre of the physics chassis box**, a `TUNING.car.chassis.halfExtents` box (currently 1.8 × 0.6 × 4.2 m). The bodywork may stick out past the box, but anything far outside it will visibly pass through walls.
 
 ## Nodes
 
@@ -33,17 +33,17 @@ The code moves each wheel node to the physics wheel's position every frame, stee
 
 - **Origin at the hub centre**, the middle of the tyre in all three axes, not its inner face. If the mesh isn't centred, put it in a child node with an offset.
 - **Axle along X.** The wheel node's own rotation is kept, so it may flip the wheel (e.g. 180° about Y for a right wheel) as long as the axle stays on X.
-- **Radius `TUNING.car.wheels.radius` and width `wheels.width`** (currently 0.4 m and 0.3 m).
+- **Radius `TUNING.car.wheels.radius` and width `wheels.width`** (currently 0.33 m and 0.36 m).
 - **Placed at the rest hub position** from `wheels.positions`, minus `suspension.restLength` in Y. Currently:
 
   | Node       | Position (x, y, z) |
   | ---------- | ------------------ |
-  | `wheel_fl` | 0.85, −0.5, 1.3    |
-  | `wheel_fr` | −0.85, −0.5, 1.3   |
-  | `wheel_rl` | 0.85, −0.5, −1.3   |
-  | `wheel_rr` | −0.85, −0.5, −1.3  |
+  | `wheel_fl` | 0.74, −0.57, 1.3   |
+  | `wheel_fr` | −0.74, −0.57, 1.3  |
+  | `wheel_rl` | 0.74, −0.57, −1.3  |
+  | `wheel_rr` | −0.74, −0.57, −1.3 |
 
-The code ignores the authored position and uses the physics position, but the bodywork's wheel arches are modelled around the authored one, so the two have to agree.
+The code ignores the authored position and uses the physics position. That is the suspension fully extended, which is where the wheels hang in the air. Resting on the ground, the car's weight compresses the suspension by the **static sag** (currently 0.073 m), so the wheels sit that much higher. Model the wheel arches around the loaded position (authored position + sag in Y), so the wheels are centred in them while driving and drop a little out of them in the air.
 
 ### Thrusters
 
@@ -62,19 +62,26 @@ A model that loads without these warnings, and has its wheels in its arches and 
 
 ## Budget
 
-Rough targets for the hero model (M11), so the car doesn't dominate the frame budget:
+Targets, so the car doesn't dominate the frame budget:
 
-- ~50k–150k triangles in total, a handful of materials.
-- Geometry compressed with Draco or Meshopt, and textures as KTX2. Use `gltf-transform` (already a dev dependency) for both.
+- ~50k–150k triangles drawn in total (a wheel mesh shared by four nodes counts four times), a handful of materials.
+- Geometry compressed with Meshopt or Draco, and textures as WebP. Use `gltf-transform` (a dev dependency) for both. `useGLTF` decodes WebP out of the box; KTX2 would need a `KTX2Loader` set up in code.
 
-## Placeholder
+## Hero model
 
-- **Source:** `race-future.glb` from the [Kenney Car Kit](https://kenney.nl/assets/car-kit) (v3.1), CC0 1.0. The licence is in `assets/car-kit/License.txt`. No credit is required, but thanks, Kenney.
-- **Script:** `scripts/build-car-model.ts` (`npm run model:car`, or `make car-model`) converts the source into this layout using the current tuning:
-  - renames the nodes,
-  - scales the body uniformly so the wheelbase matches the physics,
-  - puts the body's ground line on the physics ground line at rest,
-  - centres and resizes the wheels onto the physics hubs,
-  - adds `thruster_left`/`thruster_right` on the rear face,
-  - embeds the texture.
+- **Source:** ["Tesla Roadtser 2026"](https://sketchfab.com/3d-models/tesla-roadtser-2026-7630c9fe842d4f5ea86fc1f122753b89) by asiphy007 on Sketchfab, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The original file is `assets/roadster-2026/source.glb`; title, author, licence and the list of changes are in `assets/roadster-2026/LICENSE.txt`.
+- **Credit is required.** It's in the main menu (`CAR_MODEL_CREDIT` in `src/config/assets.ts`), the README and here. The licence covers the model, not the real car's name or design, so keep "Tesla" out of the game's title and UI.
+- **What the source is:** one mesh (500k triangles, one material with a baked 2048² texture) made of three islands: the body with the front wheels fused in, and the two rear wheels. Already +Y up, nose to +Z, ground at y = 0, but not in metres.
+- **Script:** `scripts/build-car-model.ts` (`npm run model:car`, or `make car-model`) converts it into this layout using the current tuning:
+  - splits the mesh into islands and takes the left rear wheel as the template for all four wheels: centred on its hub and scaled to the physics radius and width, with right wheels turned 180° about Y;
+  - cuts the fused front tyres out of the body (an X-axis cylinder around each front hub) and drops the other rear wheel;
+  - closes the opened front arches with dark liners (a cylinder plus an inner disc, clear of the steered wheel);
+  - scales the body uniformly so the wheelbase matches the physics, with its ground line on the ground with the car resting on its suspension (the static sag is measured by settling the car in Rapier, `scripts/car-model-targets.ts`);
+  - moves the texture from the emissive slot to base colour (roughness 0.5, metalness 0), so the car is lit;
+  - adds `thruster_left`/`thruster_right` at the two outer exhaust vents in the rear diffuser;
+  - simplifies the body to ~95k triangles and the wheel to ~11k (139k drawn in all), then compresses the geometry with Meshopt and the texture to WebP. Output ≈ 1.5 MB.
 - Re-run it after changing the chassis, wheel or suspension tuning, and commit the new `public/models/car.glb`.
+
+## Fallback
+
+The M9 placeholder, `race-future.glb` from the [Kenney Car Kit](https://kenney.nl/assets/car-kit) (v3.1, CC0 1.0, licence in `assets/car-kit/License.txt`), is still in `assets/car-kit/`. `npm run model:car:kenney` (`scripts/build-car-model-kenney.ts`) builds it into the same `public/models/car.glb`: renamed nodes, body scaled to the wheelbase, wheels centred and resized onto the physics hubs, thrusters on the rear face, texture embedded. It doesn't account for the static sag, so its wheels sit a little high in their arches.

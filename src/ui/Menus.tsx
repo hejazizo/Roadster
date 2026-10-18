@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { CAR_MODEL_CREDIT } from '../config/assets'
 import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
 import { onPress } from '../input/input'
 import { useInputStore } from '../state/inputStore'
@@ -124,6 +125,17 @@ function MainMenu() {
             </div>
           ))}
         </dl>
+        <p className="menu-credit">
+          Car model by {CAR_MODEL_CREDIT.author} on{' '}
+          <a href={CAR_MODEL_CREDIT.source} target="_blank" rel="noreferrer">
+            {CAR_MODEL_CREDIT.site}
+          </a>
+          ,{' '}
+          <a href={CAR_MODEL_CREDIT.licenseUrl} target="_blank" rel="noreferrer">
+            {CAR_MODEL_CREDIT.license}
+          </a>
+          , modified
+        </p>
       </div>
     </div>
   )

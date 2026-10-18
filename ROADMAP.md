@@ -28,7 +28,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 8   | Input mapping & gamepad        | 2 · Game    | ☑      |
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☑      |
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☑      |
-| 11  | Hero Roadster model            | 3 · Details | ☐      |
+| 11  | Hero Roadster model            | 3 · Details | ☑      |
 | 12  | Lighting & materials           | 3 · Details | ☐      |
 | 13  | Thruster VFX & post-processing | 3 · Details | ☐      |
 | 14  | Audio                          | 3 · Details | ☐      |
@@ -191,9 +191,9 @@ Each milestone here is independent enough to do in any order, apart from M11 →
 - **At physics scale:** fitting the wheelbase (1.153 file units) to the physics 2.6 m means a scale of ≈ 2.25. The car becomes ≈ 4.27 m long, 1.86 m wide and 1.13 m tall, with wheels of radius ≈ 0.33 m and width 0.36 m, and a track of ±0.74 m. The current tuning has 0.4 m wheels at ±0.85 m and a 1.8 × 0.6 × 4.0 m collider.
 - **Branding:** no Tesla badges or readable text. The rear plate is illegible, and the design reads as a generic wedge supercar.
 - **Thruster spots:** four round vents in the rear diffuser below the plate, and two small cylindrical stubs at the lower rear corners.
-- **Extra files:** `source/textures/shaded_0.png` is the embedded texture flipped vertically, so it's redundant. `.DS_Store` files are in the folder and `.gitignore` doesn't cover them.
+- **Extra files:** `source/textures/shaded_0.png` is the embedded texture flipped vertically, so it's redundant. `.DS_Store` files are in the folder (now git-ignored).
 
-1. **Tidy the source:** move the GLB to `assets/roadster-2026/source.glb`, drop the duplicate PNG and the `.DS_Store` files, add `.DS_Store` to `.gitignore`, and commit the source like the Kenney kit (29 MB, under GitHub's 100 MB file limit).
+1. **Tidy the source:** move the GLB to `assets/roadster-2026/source.glb`, drop the duplicate PNG, and commit the source like the Kenney kit (29 MB, under GitHub's 100 MB file limit).
 2. **Build script:** `scripts/build-car-model.ts` only handles the Kenney source (its node names, translated-only wheels). Extend it with a second source, or add a sibling script, so that `npm run model:car` / `make car-model` output the hero car in the `docs/car-model-spec.md` layout:
    - scale it uniformly to fit the physics wheelbase, origin at the chassis-box centre (axes already match);
    - **wheels:** take one rear-wheel island as the template. Re-centre it on its hub with the axle on X, and use copies for all four `wheel_*` nodes, mirrored for the other side. Cut the fused front wheels out of the body: drop the triangles inside a cylinder around each front hub, then check the arches for holes. Remove the other rear island too. One template gives four matching wheels and gets rid of the malformed front-left hub;
@@ -206,6 +206,8 @@ Each milestone here is independent enough to do in any order, apart from M11 →
 6. Replace the _Placeholder_ section of `docs/car-model-spec.md` with a _Hero model_ section. Keep `assets/car-kit/` as a fallback source.
 
 **Done when:** the Roadster replaces the placeholder with no code changes beyond the asset, tuning and the credit line. No spec warnings appear in the console, the car is ≤150k triangles, its wheels spin and steer inside their arches, and `dev`, `build` and `lint` pass.
+
+✅ **Done:** source in `assets/roadster-2026/source.glb` with `LICENSE.txt`. `scripts/build-car-model.ts` (`npm run model:car`, deterministic, same bytes on host and in Docker) splits the mesh into islands by position, uses the left rear wheel as the template for all four (right ones turned 180° about Y), cuts the fused front tyres out of the body, closes the opened front arches with dark liners (a cylinder plus an inner disc, clear of the steered wheel), moves the texture from emissive to base colour, simplifies permissively with UVs as weighted attributes (the atlas's seams blocked the default simplifier) to body 95k + 4 × 11k wheel = 139k triangles, and compresses with Meshopt + WebP to 1.54 MB. Thrusters sit at the two outer exhaust vents. The body is fitted around the _loaded_ hubs: the 0.073 m static sag is measured by settling the car in Rapier (`scripts/car-model-targets.ts`), so wheels sit centred in the arches at rest. The Kenney build moved to `build-car-model-kenney.ts` (`model:car:kenney`). Tuning: wheels 0.33 m radius × 0.36 m at ±0.74, mounts lowered to y −0.17 (chassis box back at its old 0.83 m rest height, roof level with the collider top), collider 1.8 × 0.6 × 4.2 m. Credit in the main menu (`CAR_MODEL_CREDIT` in `src/config/assets.ts`, no "Tesla" in the UI), a new `README.md` and `docs/car-model-spec.md` (_Hero model_ + _Fallback_ sections). Headless Rapier sim, old vs new tuning: rest height, 0–25 m/s, hop, kicker landing, 20 m gap, 80 m gap (glide needed), kicker ring and void ring (hit by every hop + glide 20–45 m/s, missed by every plain hop) all match within noise. Headless Chrome: no spec warnings, wheels steer and spin, glow at the vents; 60 fps also with CPU 4× throttle, 37 avg / 50 max draw calls, ~285k triangles per frame (car drawn twice with the shadow pass), first load ~2.4 MB gzipped (`docs/performance.md`).
 
 ### M12 — Lighting & materials
 
@@ -296,6 +298,9 @@ Park later ideas here instead of building them early.
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
 - Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons), rumble on landing and boost (M13/M15), and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
-- The placeholder body is longer than the 4 m chassis collider (4.55 m, nose ~0.57 m ahead of it), so the nose can dip into walls on a head-on hit, and its arches are modelled for bigger wheels than the physics' 0.4 m. Fit the collider (and maybe wheel size) to the hero model in M11, as a tuning change.
+- The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M15/M16).
+- The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
+- The placeholder thruster discs (0.15 m, dark when off) are bigger than the hero car's exhaust vents and cover them; M13's VFX should size the effect to the nozzles.
+- The front arch liners are flat dark geometry and the wheel arches have no real inner detail; the baked texture also carries its own lighting — both M12 material work.
 - The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.
 - The hero model (M11) ships with one material and one baked texture, so M12's clearcoat paint, glass and emissive lights need it split into separate materials first, by texture region or by mesh selection in the build script. Paint-colour choice (M12/M17) also needs the paint isolated from the baked texture, for example with a mask.

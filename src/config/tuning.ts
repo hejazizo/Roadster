@@ -17,18 +17,18 @@ export const TUNING = {
       yaw: Math.PI, // face away from the default camera
     },
     chassis: {
-      halfExtents: [0.9, 0.3, 2.0] as Vec3,
+      halfExtents: [0.9, 0.3, 2.1] as Vec3,
       mass: 150,
     },
     wheels: {
-      radius: 0.4,
-      width: 0.3,
+      radius: 0.33,
+      width: 0.36,
       // Chassis-local suspension mount points: front-left, front-right, rear-left, rear-right.
       positions: [
-        [0.85, -0.1, 1.3],
-        [-0.85, -0.1, 1.3],
-        [0.85, -0.1, -1.3],
-        [-0.85, -0.1, -1.3],
+        [0.74, -0.17, 1.3],
+        [-0.74, -0.17, 1.3],
+        [0.74, -0.17, -1.3],
+        [-0.74, -0.17, -1.3],
       ] as Vec3[],
     },
     suspension: {

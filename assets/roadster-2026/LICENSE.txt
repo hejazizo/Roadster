@@ -1,0 +1,19 @@
+Hero car model
+
+Title:   "Tesla Roadtser 2026" (title as published, spelling included)
+Author:  asiphy007
+Source:  https://sketchfab.com/3d-models/tesla-roadtser-2026-7630c9fe842d4f5ea86fc1f122753b89
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+Fetched: 2026-10-17 (original .glb download)
+
+source.glb is the original file, unchanged.
+
+Modified for Roadster: public/models/car.glb is built from it by scripts/build-car-model.ts.
+The build decimates the mesh (500k to about 140k triangles), rebuilds all four wheels from
+one rear wheel (the fused front wheels are cut out of the body and dark arch liners added),
+moves the texture from the emissive to the base colour slot, rescales and re-centres the car,
+and compresses the geometry (Meshopt) and texture (WebP).
+
+CC BY 4.0 covers the modeller's copyright only. It grants no rights to any trademark or
+design of the car it depicts; the game does not use the "Tesla" name or logos.
