@@ -57,4 +57,20 @@ export const TUNING = {
     // Below this speed (m/s) S starts reversing instead of braking, and W the other way round.
     stopSpeed: 0.5,
   },
+  camera: {
+    chase: {
+      distance: 7, // m behind the car at rest
+      height: 2.5, // m above the car
+      lookHeight: 1, // m above the car the camera aims at
+      lookAhead: 3, // m ahead of the car the camera aims at
+      speedDistance: 0.1, // extra m of distance per m/s of speed
+      maxExtraDistance: 3, // cap on the speed-based extra distance
+      // Damping rates (1/s): higher follows more tightly, lower lags more.
+      positionDamping: 6,
+      headingDamping: 4,
+      lookDamping: 10,
+      minHeight: 0.5, // m, camera never goes below this (ground is y = 0)
+      snapDistance: 10, // m the car moves in one frame (reset/respawn) that snaps the camera
+    },
+  },
 } as const

@@ -1,6 +1,7 @@
 import { Physics, type RapierRigidBody } from '@react-three/rapier'
 import { Suspense, useRef } from 'react'
-import LookAtCar from '../camera/LookAtCar'
+import type { Mesh } from 'three'
+import CameraRig from '../camera/CameraRig'
 import Car from '../car/Car'
 import { TUNING } from '../config/tuning'
 import Ground from './Ground'
@@ -10,18 +11,20 @@ const SKY_COLOR = '#87ceeb'
 
 export default function World() {
   const carRef = useRef<RapierRigidBody>(null)
+  const carVisualRef = useRef<Mesh>(null)
 
   return (
     <>
       <color attach="background" args={[SKY_COLOR]} />
-      <Lights />
+      <Lights target={carVisualRef} />
       <Suspense fallback={null}>
-        <Physics gravity={TUNING.world.gravity}>
+        {/* Step physics before other frame callbacks so the camera reads this frame's car pose. */}
+        <Physics gravity={TUNING.world.gravity} updatePriority={-1}>
           <Ground />
-          <Car ref={carRef} />
+          <Car ref={carRef} visualRef={carVisualRef} />
         </Physics>
       </Suspense>
-      <LookAtCar target={carRef} />
+      <CameraRig target={carVisualRef} body={carRef} />
     </>
   )
 }

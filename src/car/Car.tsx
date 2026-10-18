@@ -7,7 +7,7 @@ import {
   type RapierRigidBody,
 } from '@react-three/rapier'
 import { useEffect, useRef, type RefObject } from 'react'
-import { MathUtils, Quaternion, Vector3, type Group } from 'three'
+import { MathUtils, Quaternion, Vector3, type Group, type Mesh } from 'three'
 import { TUNING } from '../config/tuning'
 import { useCarControls } from './useCarControls'
 
@@ -28,9 +28,11 @@ type VehicleController = ReturnType<
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
+  // The chassis mesh, whose world transform is the car's interpolated pose (for the camera).
+  visualRef: RefObject<Mesh | null>
 }
 
-export default function Car({ ref }: CarProps) {
+export default function Car({ ref, visualRef }: CarProps) {
   const { world } = useRapier()
   const controls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
@@ -135,7 +137,7 @@ export default function Car({ ref }: CarProps) {
       canSleep={false}
     >
       <CuboidCollider args={chassis.halfExtents} mass={chassis.mass} />
-      <mesh castShadow>
+      <mesh ref={visualRef} castShadow>
         <boxGeometry args={[hx * 2, hy * 2, hz * 2]} />
         <meshStandardMaterial color={BODY_COLOR} />
       </mesh>

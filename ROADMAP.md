@@ -19,7 +19,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | --- | ------------------------------ | ----------- | ------ |
 | 0   | Project scaffold               | 1 · Core    | ☑      |
 | 1   | Drivable box car               | 1 · Core    | ☑      |
-| 2   | Chase camera                   | 1 · Core    | ☐      |
+| 2   | Chase camera                   | 1 · Core    | ☑      |
 | 3   | Boost, hop & glide             | 1 · Core    | ☐      |
 | 4   | Basic HUD                      | 1 · Core    | ☐      |
 | 5   | Greybox test world             | 1 · Core    | ☐      |
@@ -74,6 +74,8 @@ Goal: a box that drives, flies a little, and feels good. No art, no menus.
 - Toggle (C) between chase cam and a free orbit debug cam.
 
 **Done when:** driving feels readable at both low and high speed.
+
+✅ **Done:** `src/camera/ChaseCam.tsx` follows the car's interpolated chassis mesh with damped heading/position/look target, pulls back with speed, clamps above the ground and snaps on reset; `CameraRig.tsx` toggles drei `OrbitControls` with C; physics steps at `updatePriority={-1}` so the camera reads the current frame; sun + shadow box follow the car; values in `TUNING.camera`.
 
 ### M3 — Boost, hop & glide
 
@@ -244,5 +246,7 @@ Park later ideas here instead of building them early.
 - Day/night cycle and weather
 - Bundle is ~3.4 MB (1.2 MB gzip), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
 - Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
-- The shadow camera covers only ±20 m around the origin, so the car loses its shadow far from spawn; make it follow the car (M2/M12).
+- Chase cam ground clamp assumes flat ground at y = 0; switch to a downward raycast when M5 adds platforms and ramps.
+- The chase cam can pass through walls between it and the car; add an obstruction raycast when M5 adds walls (or in M15).
+- A reset tap shorter than one physics step (~16 ms) can be missed because controls are sampled per step; latch presses in the M8 input layer.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
