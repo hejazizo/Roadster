@@ -8,6 +8,17 @@ Vite · TypeScript · React · React Three Fiber (three.js) · drei · Rapier (`
 
 ## Commands
 
+Docker (only Docker needed on the host):
+
+- `make dev` — build the image and start the dev server on http://localhost:5173 (hot reload via bind mount)
+- `make down` — stop it
+- `make lint` / `make build` / `make format` — run the npm scripts in a container
+- `make shell` — bash inside the container; `make clean` — remove image and volumes
+
+The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
+
+Local Node (alternative):
+
 - `npm run dev` — dev server
 - `npm run build` — type-check + production build
 - `npm run lint` — ESLint

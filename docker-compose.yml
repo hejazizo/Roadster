@@ -1,0 +1,10 @@
+services:
+  web:
+    build: .
+    ports:
+      - '5173:5173'
+    volumes:
+      # Source is bind-mounted for hot reload; node_modules stays in the container
+      # so Linux-native packages never mix with the host's.
+      - .:/app
+      - /app/node_modules
