@@ -1,6 +1,6 @@
 import { Physics, type RapierRigidBody } from '@react-three/rapier'
 import { Suspense, useRef } from 'react'
-import type { Mesh } from 'three'
+import type { Group } from 'three'
 import CameraRig from '../camera/CameraRig'
 import Car from '../car/Car'
 import { TUNING } from '../config/tuning'
@@ -14,7 +14,7 @@ const SKY_COLOR = '#87ceeb'
 
 export default function World() {
   const carRef = useRef<RapierRigidBody>(null)
-  const carVisualRef = useRef<Mesh>(null)
+  const carVisualRef = useRef<Group>(null)
   const paused = useRaceStore((s) => s.paused)
 
   return (

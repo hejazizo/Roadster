@@ -26,7 +26,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 6   | Ring time-trial loop           | 2 · Game    | ☑      |
 | 7   | Menus & saved best times       | 2 · Game    | ☑      |
 | 8   | Input mapping & gamepad        | 2 · Game    | ☑      |
-| 9   | Placeholder car model (GLB)    | 2 · Game    | ☐      |
+| 9   | Placeholder car model (GLB)    | 2 · Game    | ☑      |
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☐      |
 | 11  | Hero Roadster model            | 3 · Details | ☐      |
 | 12  | Lighting & materials           | 3 · Details | ☐      |
@@ -155,6 +155,8 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 **Done when:** the box is replaced by a model with spinning, steering wheels, and nothing in the physics changed.
 
+✅ **Done:** Kenney Car Kit `race-future` (CC0) source in `assets/car-kit/`; `scripts/build-car-model.ts` (`npm run model:car`, gltf-transform) converts it to `public/models/car.glb` from the current tuning: renamed nodes, body scaled to the physics wheelbase and ground line, wheels centred and resized onto the physics hubs, `thruster_left`/`thruster_right` empties, texture embedded. `src/car/CarModel.tsx` loads it with `useGLTF` (path in `src/config/assets.ts`), splits off the `wheel_*` nodes into the existing steer/spin groups and draws the thruster glow at each `thruster_*` node, with dev console warnings for missing or misplaced wheels; the camera target is now a group outside the model's Suspense. Spec in `docs/car-model-spec.md`. Collider, tuning and physics code untouched. Checked in headless Chrome: front wheels steer, all wheels spin and follow the suspension, glow on boost, no spec warnings, and a scripted 3 s drive matches HEAD within run-to-run noise.
+
 ### M10 — Stable v0.1 & deploy
 
 - Bug bash: play through repeatedly, fix anything that breaks the loop.
@@ -256,7 +258,7 @@ Park later ideas here instead of building them early.
 - Multiplayer ghost races (share best-run replays)
 - Leaderboards
 - Day/night cycle and weather
-- Bundle is ~3.4 MB (1.2 MB gzip), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
+- Bundle is ~3.7 MB (1.27 MB gzip; GLTFLoader added ~70 kB in M9), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
 - Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
 - Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M15. Hop presses are latched for one physics step now; a buffer would keep them a little longer.
 - Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
@@ -270,3 +272,5 @@ Park later ideas here instead of building them early.
 - Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons), rumble on landing and boost (M13/M15), and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data.
 - A press latched while the pause menu is up (e.g. Y) still fires on resume; clear the car's latches on pause if it ever matters.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
+- The placeholder body is longer than the 4 m chassis collider (4.55 m, nose ~0.57 m ahead of it), so the nose can dip into walls on a head-on hit, and its arches are modelled for bigger wheels than the physics' 0.4 m. Fit the collider (and maybe wheel size) to the hero model in M11, as a tuning change.
+- The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.

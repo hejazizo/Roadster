@@ -6,8 +6,8 @@ import {
   useRapier,
   type RapierRigidBody,
 } from '@react-three/rapier'
-import { useEffect, useRef, type RefObject } from 'react'
-import { MathUtils, type Group, type Mesh, type MeshStandardMaterial } from 'three'
+import { Suspense, useEffect, useRef, type RefObject } from 'react'
+import { MathUtils, type Group, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
 import { isCarHeld, useRaceStore } from '../state/raceStore'
@@ -17,20 +17,14 @@ import {
   stepAbilities,
   type VehicleController,
 } from './abilities'
+import CarModel from './CarModel'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
 import { released, useCarControls } from './useCarControls'
 
 const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
 
-const BODY_COLOR = '#e63946'
-const CABIN_COLOR = '#1d3557'
-const WHEEL_COLOR = '#222222'
-// Placeholder thruster at the rear: glows while boosting or gliding, dark when out of fuel.
-const THRUSTER_COLOR = '#333333'
-const THRUSTER_GLOW = '#ff8c1a'
+// Thruster glow while boosting or gliding; dark otherwise, including when out of fuel.
 const THRUSTER_GLOW_INTENSITY = 3
-
-const [hx, hy, hz] = chassis.halfExtents
 
 const isFront = (i: number) => i < 2
 
@@ -54,8 +48,8 @@ function applyWheelTuning(vc: VehicleController, i: number) {
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
-  // The chassis mesh, whose world transform is the car's interpolated pose (for the camera).
-  visualRef: RefObject<Mesh | null>
+  // The car's visual root, whose world transform is its interpolated pose (for the camera).
+  visualRef: RefObject<Group | null>
 }
 
 export default function Car({ ref, visualRef }: CarProps) {
@@ -67,7 +61,7 @@ export default function Car({ ref, visualRef }: CarProps) {
   const abilities = useRef(createAbilityState())
   const safePoint = useRef(createSafePoint())
   const ray = useRef<Ray | null>(null)
-  const thruster = useRef<MeshStandardMaterial>(null)
+  const thrusterMaterials = useRef<(MeshStandardMaterial | null)[]>([])
   const steerGroups = useRef<(Group | null)[]>([])
   const spinGroups = useRef<(Group | null)[]>([])
 
@@ -157,8 +151,8 @@ export default function Car({ ref, visualRef }: CarProps) {
   // Visual wheels follow the controller's suspension, steering and spin.
   useFrame(() => {
     const { fuel, grounded, boosting, gliding } = abilities.current
-    if (thruster.current) {
-      thruster.current.emissiveIntensity = boosting || gliding ? THRUSTER_GLOW_INTENSITY : 0
+    for (const m of thrusterMaterials.current) {
+      if (m) m.emissiveIntensity = boosting || gliding ? THRUSTER_GLOW_INTENSITY : 0
     }
     // Mirror the car's state for the HUD once per rendered frame.
     const v = ref.current?.linvel()
@@ -190,44 +184,16 @@ export default function Car({ ref, visualRef }: CarProps) {
       canSleep={false}
     >
       <CuboidCollider args={chassis.halfExtents} mass={chassis.mass} />
-      <mesh ref={visualRef} castShadow>
-        <boxGeometry args={[hx * 2, hy * 2, hz * 2]} />
-        <meshStandardMaterial color={BODY_COLOR} />
-      </mesh>
-      {/* Cabin sits towards the front (+Z) so the heading is readable. */}
-      <mesh castShadow position={[0, hy + 0.2, hz * 0.15]}>
-        <boxGeometry args={[hx * 1.6, 0.4, hz * 0.9]} />
-        <meshStandardMaterial color={CABIN_COLOR} />
-      </mesh>
-      <mesh position={[0, 0, -hz - 0.05]}>
-        <boxGeometry args={[hx, hy, 0.1]} />
-        <meshStandardMaterial
-          ref={thruster}
-          color={THRUSTER_COLOR}
-          emissive={THRUSTER_GLOW}
-          emissiveIntensity={0}
-        />
-      </mesh>
-      {wheels.positions.map(([x, y, z], i) => (
-        <group
-          key={i}
-          position={[x, y - suspension.restLength, z]}
-          ref={(g) => {
-            steerGroups.current[i] = g
-          }}
-        >
-          <group
-            ref={(g) => {
-              spinGroups.current[i] = g
-            }}
-          >
-            <mesh castShadow rotation-z={Math.PI / 2}>
-              <cylinderGeometry args={[wheels.radius, wheels.radius, wheels.width, 16]} />
-              <meshStandardMaterial color={WHEEL_COLOR} />
-            </mesh>
-          </group>
-        </group>
-      ))}
+      {/* Outside the Suspense, so the camera has a target while the model loads. */}
+      <group ref={visualRef}>
+        <Suspense fallback={null}>
+          <CarModel
+            steerGroups={steerGroups}
+            spinGroups={spinGroups}
+            thrusterMaterials={thrusterMaterials}
+          />
+        </Suspense>
+      </group>
     </RigidBody>
   )
 }
