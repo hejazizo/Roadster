@@ -3,7 +3,7 @@ import { TUNING } from '../config/tuning'
 
 // Sections shown in the panel. Their values are read every physics step or frame, so
 // editing them in place takes effect immediately. Structural values (gravity, chassis,
-// wheel layout, spawn) are only read at startup and stay out of the panel.
+// wheel layout) are only read at startup and stay out of the panel.
 const SECTIONS: [string, Record<string, unknown>][] = [
   ['Engine', TUNING.car.engine],
   ['Brake', TUNING.car.brake],

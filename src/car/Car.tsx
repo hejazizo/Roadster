@@ -23,11 +23,11 @@ import {
 } from './abilities'
 import CarModel from './CarModel'
 import { createDrivingState, resetDriving, stepDriving } from './handling'
-import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
+import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray, type Spawn } from './respawn'
 import { resetTelemetry, stepTelemetry, type CarTelemetry } from './telemetry'
 import { released, useCarControls } from './useCarControls'
 
-const { spawn, chassis, wheels, suspension } = TUNING.car
+const { chassis, wheels, suspension } = TUNING.car
 
 // Tail-light brightness while braking, as a multiple of the model's own.
 const BRAKE_LIGHT_BOOST = 3
@@ -47,9 +47,11 @@ type CarProps = {
   visualRef: RefObject<Group | null>
   // Landings, skids and braking for the effects and camera; written here every physics step.
   telemetry: RefObject<CarTelemetry>
+  // The level's start pose; the car returns here on a restart or level change.
+  spawn: Spawn
 }
 
-export default function Car({ ref, visualRef, telemetry }: CarProps) {
+export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
   const { world, rapier } = useRapier()
   const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
@@ -110,7 +112,8 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
     // R or falling out of the world puts the car back at its last safe point.
     const fell = body.translation().y < TUNING.world.killY
     if (restarted || c.reset || fell) {
-      placeAtSafePoint(safePoint.current, body, fell && !restarted ? body.translation() : undefined)
+      const fellAt = fell && !restarted ? body.translation() : undefined
+      placeAtSafePoint(safePoint.current, body, spawn, fellAt)
       resetDriving(driving.current)
       resetAbilities(abilities.current, body)
       resetTelemetry(telemetry.current, !restarted)

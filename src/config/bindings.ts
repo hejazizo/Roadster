@@ -15,6 +15,7 @@ export type ButtonAction =
   | 'prev' // previous option on a menu screen (paint)
   | 'next' // next option on a menu screen
   | 'assists' // switch assist mode on the main and pause menus
+  | 'level' // switch level on the main menu
   | 'mute' // sound on / off
   | 'camera' // debug orbit cam
   | 'tuning' // debug tuning panel
@@ -39,6 +40,7 @@ const A = 0
 const B = 1
 const X = 2
 const Y = 3
+const RB = 5
 const LT = 6
 const RT = 7
 const VIEW = 8
@@ -82,6 +84,7 @@ export const BINDINGS: {
     prev: { keys: ['ArrowLeft', 'KeyA'], pad: [DPAD_LEFT] },
     next: { keys: ['ArrowRight', 'KeyD'], pad: [DPAD_RIGHT] },
     assists: { keys: ['KeyT'], pad: [Y] },
+    level: { keys: ['KeyL'], pad: [RB] },
     mute: { keys: ['KeyM'], pad: [] },
     camera: { keys: ['KeyC'], pad: [] },
     tuning: { keys: ['Backquote'], pad: [] },

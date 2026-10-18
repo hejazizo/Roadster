@@ -7,7 +7,7 @@ import {
 import { useEffect, type RefObject } from 'react'
 import { TUNING } from '../config/tuning'
 import { useRaceStore } from '../state/raceStore'
-import type { Level, Ring } from './testLevel'
+import type { Level, Ring } from './levelData'
 
 const NEXT_COLOR = '#ffd60a'
 const NEXT_GLOW = 1.2

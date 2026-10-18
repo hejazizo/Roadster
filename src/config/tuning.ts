@@ -12,10 +12,7 @@ export const TUNING = {
   },
   car: {
     // Car-local axes: +Z is forward (Rapier's vehicle forward axis), +Y up, +X left.
-    spawn: {
-      position: [0, 1.5, 0] as Vec3,
-      yaw: Math.PI, // face away from the default camera
-    },
+    // The spawn pose is per level (src/scene/levelData.ts).
     chassis: {
       halfExtents: [0.9, 0.3, 2.1] as Vec3,
       mass: 150,

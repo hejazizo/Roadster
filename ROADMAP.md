@@ -15,28 +15,33 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 
 ## Progress
 
-| #   | Milestone                      | Phase       | Status |
-| --- | ------------------------------ | ----------- | ------ |
-| 0   | Project scaffold               | 1 · Core    | ☑      |
-| 1   | Drivable box car               | 1 · Core    | ☑      |
-| 2   | Chase camera                   | 1 · Core    | ☑      |
-| 3   | Boost, hop & glide             | 1 · Core    | ☑      |
-| 4   | Basic HUD                      | 1 · Core    | ☑      |
-| 5   | Greybox test world             | 1 · Core    | ☑      |
-| 6   | Ring time-trial loop           | 2 · Game    | ☑      |
-| 7   | Menus & saved best times       | 2 · Game    | ☑      |
-| 8   | Input mapping & gamepad        | 2 · Game    | ☑      |
-| 9   | Placeholder car model (GLB)    | 2 · Game    | ☑      |
-| 10  | Stable v0.1 & deploy           | 2 · Game    | ☑      |
-| 11  | Hero Roadster model            | 3 · Details | ☑      |
-| 12  | Lighting & materials           | 3 · Details | ☑      |
-| 13  | Thruster VFX & post-processing | 3 · Details | ☑      |
-| 14  | Audio                          | 3 · Details | ☑      |
-| 15  | Handling & flight polish       | 3 · Details | ☑      |
-| 16  | Real level art                 | 3 · Details | ☐      |
-| 17  | More levels & game modes       | 3 · Details | ☐      |
-| 18  | Performance, mobile & settings | 3 · Details | ☐      |
-| 19  | Release polish                 | 3 · Details | ☐      |
+| #    | Milestone                      | Phase       | Status |
+| ---- | ------------------------------ | ----------- | ------ |
+| 0    | Project scaffold               | 1 · Core    | ☑      |
+| 1    | Drivable box car               | 1 · Core    | ☑      |
+| 2    | Chase camera                   | 1 · Core    | ☑      |
+| 3    | Boost, hop & glide             | 1 · Core    | ☑      |
+| 4    | Basic HUD                      | 1 · Core    | ☑      |
+| 5    | Greybox test world             | 1 · Core    | ☑      |
+| 6    | Ring time-trial loop           | 2 · Game    | ☑      |
+| 7    | Menus & saved best times       | 2 · Game    | ☑      |
+| 8    | Input mapping & gamepad        | 2 · Game    | ☑      |
+| 9    | Placeholder car model (GLB)    | 2 · Game    | ☑      |
+| 10   | Stable v0.1 & deploy           | 2 · Game    | ☑      |
+| 11   | Hero Roadster model            | 3 · Details | ☑      |
+| 12   | Lighting & materials           | 3 · Details | ☑      |
+| 13   | Thruster VFX & post-processing | 3 · Details | ☑      |
+| 14   | Audio                          | 3 · Details | ☑      |
+| 15   | Handling & flight polish       | 3 · Details | ☑      |
+| 16.1 | Reveal: proving-ground greybox | 3 · Details | ☑      |
+| 16.2 | Reveal: suction & half-loop    | 3 · Details | ☐      |
+| 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☐      |
+| 16.4 | Reveal: fleet jump             | 3 · Details | ☐      |
+| 16.5 | Reveal: stunt run mode         | 3 · Details | ☐      |
+| 16.6 | Reveal: night facility art     | 3 · Details | ☐      |
+| 17   | More levels & game modes       | 3 · Details | ☐      |
+| 18   | Performance, mobile & settings | 3 · Details | ☐      |
+| 19   | Release polish                 | 3 · Details | ☐      |
 
 ---
 
@@ -172,7 +177,7 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 ## Phase 3 — Details & polish
 
-Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13.
+Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order).
 
 ### M11 — Hero Roadster model
 
@@ -316,12 +321,131 @@ Headless Chrome, 21 checks:
 - no page errors;
 - 60 fps on the M2 Max.
 
-### M16 — Real level art
+### M16 — The October 15 reveal
 
-- Replace greybox with a themed environment: terrain, road surfaces, props, skybox, distant scenery.
-- Keep the greybox collision shapes where possible; art is a visual layer on top.
+The first real level recreates the Roadster reveal of 2026-10-15, held at night at a test site in McGregor, Texas. It had two separate stunts:
 
-**Done when:** the first level looks finished and still plays the same.
+1. **Half-loop:** the car climbs a ~20 m (67 ft) inverted half-loop ramp with red edge lights. Underbody fans hold it to the surface (Tesla claims up to 2 g of suction), so it can stop upside down at the top. It then drops off the inverted lip, cold-gas jets roll it ~180° upright and slow its fall, and it lands on flat asphalt in a puff of white vapour.
+2. **Fleet jump:** on a separate flat straight with no ramp, the jets lift the car straight off the ground. It flies over five parked vehicles in a row (a sedan, a crossover, an angular pickup, a two-seat robotaxi pod and a semi tractor, the tallest), does a longitudinal roll (the "kickflip") on the way, and lands upright beyond them.
+
+The real run was pre-programmed, with no driver. Here the player does it. The work is split into six milestones, done in order: **mechanics on greybox first, then the mode, then the art.**
+
+**References:**
+
+- Tesla's official replay (YouTube). The ramp starts around 6:03–8:11 and the fleet jump around 10:56–12:08; sources give different timestamps.
+- Press reports, e.g. [Fox Baltimore](https://foxbaltimore.com/news/nation-world/flying-cars-are-real-elon-musk-tesla-debuts-new-roadster-dramatic-fashion-ramp-spacex-thruster-texas-0-to-60-mph-second-ramp-performance-thrust-invite-only-reservation-flight-technology) and [Khaleej Times](https://www.khaleejtimes.com/business/auto/tesla-new-roadster-demo-flying-car-spacex-thrusters).
+- [roadster.pplx.app](https://roadster.pplx.app/), an interactive physics reconstruction (not a game). It has Ramp and Flight modes, a forces panel with _Wall hold / Ceiling hold / Lift-off / Tire grip_ states, and height, vertical-speed and roll-turns readouts. Its illustrative numbers, as seeds for tuning in g rather than newtons:
+  - 2,000 kg car;
+  - fan suction up to 39 kN (2 g);
+  - jet launch 53 kN up (2.7 g) and 16 kN forward (0.8 g);
+  - ten air nozzles fed by ~250 kg of stored air;
+  - roll inertia 850 kg·m² and tyre μ 0.9.
+
+  Our car is arcade (150 kg, impulse-based), so convert these to accelerations, not forces.
+
+**Trademark:** the M11 rule still applies. "Tesla", "SpaceX" and the model names stay out of the UI, level names and asset names, so the level is the **Proving Ground** and the parked cars are generic look-alikes by size and silhouette, without badges.
+
+### M16.1 — Reveal: proving-ground greybox
+
+- **New level:** `src/scene/provingGround.ts`, built from the same `Level` data as `testLevel.ts`. It's a large flat asphalt pad (no void; the edges are walls or a berm) holding:
+  - the **half-loop zone:** a straight run-up of ≥ 150 m to the ramp, with a wide, clear apron where the car lands from the lip;
+  - the **fleet zone:** a separate straight, ≥ 150 m of open asphalt before the row and ≥ 80 m after it;
+  - drivable asphalt connecting the two.
+- **Half-loop geometry:** add a new `Level` piece (e.g. `loops`), generated from a profile curve as a smooth trimesh collider plus a matching mesh. It's 20 m tall and one car plus margin wide (~5 m), with low side lips. The surface starts flat, curves through vertical and goes on to ~170–180°, so the top section is inverted and overhangs the run-up. Expose height, radius profile, width and end angle as level data, and make the curvature ease in (a clothoid-like entry) so the suspension doesn't bottom out at the transition.
+- **Parked fleet as boxes:** five fixed colliders in a row with gaps of ~1.5 m. Approximate sizes (L × W × H, m): sedan 4.7 × 1.9 × 1.45, crossover 4.8 × 1.9 × 1.6, pickup 5.7 × 2.2 × 1.8, pod 3.6 × 1.9 × 1.5, semi tractor 7.0 × 2.6 × 4.0. The row is ~31 m long, and the semi sets the clearance.
+- **Ring course:** a short course on the existing race loop that visits both zones. Rings the car can't reach yet (inside the loop, above the fleet) wait for M16.2–M16.4; for now the course runs around the zones.
+- **Level choice:** a minimal two-entry choice on the main menu (Proving Ground / Test Track), saved in localStorage. Best times are already per `Level.id`. The full level-select screen stays in M17.
+- The sim (`scripts/sim-car.ts`) can load either level, and the test-level checks still pass.
+
+**Done when:** you can pick the Proving Ground, drive the whole pad, run up into the half-loop (and fall off it, as expected without suction), bump into the fleet, and finish its ring course.
+
+✅ **Done:** level types and helpers moved to `src/scene/levelData.ts`; `Level` gains `spawn` (moved out of `TUNING.car`), `surface` (greybox colours only), `loops` and `fleet`. `src/scene/provingGround.ts`:
+
+- a walled 220 × 380 m asphalt pad (6 m walls, the slab runs past them, so no void);
+- the half-loop in the west at the end of a ~210 m run-up: 20 m tall, 5 m wide, 175°, a 12 m clothoid entry, then radius 9.7 m; the lip overhangs the entry by ~7 m;
+- the fleet in the east: five boxes nose to tail with 1.5 m gaps (31.8 m, semi last), ~215 m of run-up and ~130 m after;
+- a 6-ring course around both zones.
+
+`loopProfile` bisects the curvature so the lip ends at the given height, and `loopMesh` extrudes it into a solid (filled under the climb, a 1 m shell past vertical) with 0.5 m side lips, ~1.6k triangles. Both the mesh and a trimesh collider are built from the same triangles. The collider needs Rapier's `FIX_INTERNAL_EDGES`: without it the chassis, scraping with the suspension bottomed out, caught on a triangle edge at ~76° and stopped dead (21 → 6 m/s in one step). @react-three/rapier types `TrimeshCollider` args as two entries but passes them all to Rapier, so the flag goes in third with a cast. The level is picked on the main menu (Proving Ground / Test Track, a segmented pair; L, pad RB or click), saved in localStorage (`src/state/levelStore.ts`, junk ignored, Proving Ground by default; levels listed in `src/scene/levels.ts`). Changing it bumps `runId`, so the car, safe point, tire marks and particles reset. The best time follows the level.
+
+`npm run sim:car` builds its world from either level and takes assist modes and/or level ids as arguments. The test-level output is unchanged from HEAD. New Proving Ground checks, both assist modes:
+
+- a pursuit driver finishes the ring course in order (32.6 s);
+- the half-loop with no fans, arriving at 12 / 16 / 20 / 30 / 43 m/s: peaks 8.3 / 13.7 / 18.3 / 19.2 / 19.5 m. At 12 m/s it slides back; from 16 m/s it drops off or goes over the lip, lands on the run-up, mostly on its roof, and never ends up stuck on or behind the ramp;
+- driving into the fleet at 20 and 30 m/s stops at the sedan;
+- a boosted 45 m/s run holds at the west wall.
+
+Moving a ring fixed the course: the line from the north-end ring to the fleet ring used to run through the parked row. Headless Chrome, 27 checks:
+
+- the picker by L, click and a scripted pad RB; the choice persists; junk and blocked storage fall back to Proving Ground; L does nothing on the pause menu;
+- the best time follows the level;
+- a closed-loop driver climbs the half-loop to 19.6 m and falls off, stops at the fleet, and finishes the ring course;
+- the Test Track spawn and a 3 s drive match HEAD (15.7 m/s in this setup);
+- no page errors;
+- 60 fps; 72 draw calls at the Proving Ground's spawn vs 79 on the Test Track (`docs/performance.md`).
+
+### M16.2 — Reveal: suction & half-loop
+
+- **Fan suction:** a new held `fans` action (key and pad bindings in `bindings.ts`) adds a force into the surface along the wheels' averaged contact normal while any wheel touches. It's capped at `TUNING.car.suction.maxG` (start at 2 g) and drains fuel. On Beginner it engages on its own on surfaces steeper than ~30°; on Pro you hold it.
+- **Make everything work in the car's frame:** check `handling.ts` (downforce, weight transfer, drift push), `abilities.ts` (hop direction, glide, auto-level) and `telemetry.ts` (landing, skids) for world-up assumptions, so driving on a wall or ceiling behaves like driving on the floor. The hop pushes off the surface. Air auto-level stays as it is until M16.3.
+- **Ramp physics checks:** the car can climb the loop at speed with fans off if it's fast enough (v² / r > g at the top), and can creep up and **stop inverted** with fans on. The suspension handles the curvature, and the collider-vs-body overhang from the M11 notes doesn't dig into the curve.
+- **Chase cam on surfaces:** the camera follows the car's up vector smoothly while it's on a surface (it still uses world up in the air and on the floor), never flips 180° in one frame and never clips through the ramp.
+- **Respawn:** R on the ramp or while stuck inverted returns to the last safe point. Safe points are only recorded on level ground, as today.
+- **HUD:** a hold state next to the Grounded / Airborne pill (Wall hold / Ceiling hold, like the pplx demo) and a fans meter or flag.
+- **Audio:** a fan whine (a filtered noise band) rising with suction.
+- **Sim:** fans off, the car slides off the loop below the loop speed; fans on, it climbs from a slow approach, holds inverted for ≥ 3 s, and drives off the top. Speed for a fans-off climb is recorded. No rollovers on the run-up, and all test-level checks still pass.
+
+**Done when:** you can drive up the half-loop, stop upside down under the top section, and drive on off the lip.
+
+### M16.3 — Reveal: jets, air roll & drop
+
+- **Cold-gas jets:** a held `lift` action pushes along the car's own up vector, up to `TUNING.car.jets.liftG` (~2.7 g, so the car can lift off flat ground), plus a smaller forward push. It drains fuel (one shared bar for now). Because the thrust is body-relative, firing while inverted pushes you down, so you roll first, then brake the fall.
+- **Air roll:** a held `airRoll` action plus steer rolls the car about its long axis with a torque from `TUNING.car.jets.rollTorque`. Air auto-level (M3/M15) no longer stops the car from inverting:
+  - while you roll, it's off;
+  - otherwise it levels toward the nearest of upright or a full turn, so a roll ends upright;
+  - Beginner adds an auto-righting assist when the car falls inverted with the ground near.
+- **Landing:** landing on the roof or side counts as a bad landing (telemetry flag, camera shake, no respawn). A firm landing on the wheels under lift is a clean one. Landing damping still applies.
+- **VFX:** white cold-gas jets and vapour trails at new nozzle empties (`jet_*` nodes added to `scripts/build-car-model.ts` and `docs/car-model-spec.md`: four underbody, two per side for roll), separate from the rear boost flames. A white vapour cloud on landing under lift.
+- **Audio:** a high hiss for the jets, scaled by thrust, and a burst on lift-off.
+- **HUD:** height above ground, vertical speed and a roll-turns counter in the air.
+- **Sim:** from a stop under the inverted top, driving off, rolling and lifting gives an upright landing with an impact below the bad-landing threshold. Doing nothing lands on the roof. A standstill lift-off on flat ground climbs at > 0 m/s. The 80 m gap and void-ring checks are re-run and re-sized if lift makes them trivial (or lift is limited on the test level).
+
+**Done when:** you can drop off the half-loop's lip upside down, roll upright with the jets, slow the fall and land cleanly on all four wheels.
+
+### M16.4 — Reveal: fleet jump
+
+- **Kickflip feel:** tune lift, forward push and roll for a jump from the flat straight with no ramp. It lifts off, carries forward over ~31 m of parked cars, does one full roll, and lands upright beyond the row. A full tank allows one jump with some margin, not two in a row.
+- **Fleet models:** replace the five boxes with low-poly generic look-alikes. Either model them in a build script (`scripts/build-fleet-models.ts` → `public/models/fleet/*.glb`) or use CC0 assets. Each is ≤ 5k triangles with no badges or names (see the M16 trademark note), and their colliders keep the M16.1 sizes (compound boxes for the pickup's bed and the semi's cab and deck).
+- **Clearance and contact:** clipping a parked car counts as a hit (telemetry flag and sound). The car bounces off; the run doesn't stop. The parked cars are fixed (no knock-over physics).
+- **Rings:** the ring course gets its rings above the fleet and inside or under the half-loop, now that both are reachable.
+- **Sim:** lift + roll from a standing start and from a 20 m/s approach both clear all five without contact. Hop + glide alone can't clear the semi. Every Proving Ground ring is reachable on both assist modes.
+
+**Done when:** you can jump the whole fleet from flat ground with a roll and land upright, and clipping the semi is a real risk.
+
+### M16.5 — Reveal: stunt run mode
+
+- **Reveal run:** a second mode on the Proving Ground, next to its ring time trial, that follows the event: _half-loop → inverted hold → drop & roll → clean landing → fleet jump with kickflip → finish line_. Steps are ordered checkpoints in the race store (a new mode alongside the ring course; the `ready → countdown → racing → finished` phases stay).
+- **Scoring:** time plus bonuses for inverted hold time (≥ 2 s counts), roll turns, clean landings and zero fleet contact, and penalties for bad landings and contact. Bronze/silver/gold targets per assist mode, and the best score saved per level and mode (extend `bestTimes.ts`).
+- **UI:** an objective banner with the current step and a short hint ("Hold fans on the ceiling"), feedback popups for each step, and a results screen with the breakdown. The mode is picked on the main menu (Proving Ground only).
+- **Audio:** step-complete stings that reuse the ring chime style.
+- Headless Chrome checks: a scripted run completes every step; each failure path (bad landing, contact, falling off the loop) is scored as specified; the score persists; junk storage is ignored.
+
+**Done when:** a full reveal run can be played start to finish with a score, and replayed for a better one without reloading.
+
+### M16.6 — Reveal: night facility art
+
+The old "real level art" milestone, now for the Proving Ground. Keep the collision shapes as they are; art is a visual layer on top. The Test Track stays greybox.
+
+- **Night lighting** per level:
+  - a dim moon key light as the one shadow caster (tight shadow box as in M12);
+  - a night HDRI (CC0) for reflections, also used as the background, which closes the M12 sky note;
+  - high-intensity white floodlight towers around both zones. A few real spot lights without shadows plus emissive lamp heads, fake light cones and baked light pools on the asphalt, within the draw-call budget.
+- **Surfaces:** asphalt with lane and zone markings and patching, and a concrete apron under the loop. The ramp is smooth metallic grey with **red emissive edge strips** that bloom.
+- **Props and scenery:** fencing, barriers, light towers, a viewing stand and distant hangars or test structures with no branding, and a horizon with a dark Texas skyline.
+- **Effects:** tyre smoke and dust tinted for asphalt at night. Vapour and jets read well under floodlights.
+- **Performance:** re-measure FPS and draw calls against `docs/performance.md` and update it. Instance repeated props.
+
+**Done when:** the Proving Ground looks finished in screenshots of both stunts at night, plays the same as at the end of M16.5 (sim unchanged), and holds 60 fps on the M2 Max.
 
 ### M17 — More levels & game modes
 
@@ -361,25 +485,34 @@ Park later ideas here instead of building them early.
 - Day/night cycle and weather
 - First load is ~1.2 MB gzipped, 842 kB of it Rapier's inlined WASM (chunk sizes in `docs/performance.md`). `@react-three/rapier` imports Rapier statically, so lazy-loading physics behind the menu needs a wrapper or an upstream change — M18/M19 (with the loading screen).
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
-- The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M16). Grip is per tyre now (`handling.ts`), so a surface factor would multiply into it.
+- The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters. Grip is per tyre now (`handling.ts`), so a surface factor would multiply into it (M16.6).
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
-- The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
+- The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (the Test Track stays greybox, so M17).
 - Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons) and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data. Rumble (M13) has no on/off setting yet — M18 settings.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
-- The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M16).
+- The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play — the half-loop (M16.2) is the likely place.
 - The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
-- The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16/M19 if it matters).
+- The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16.6/M19 if it matters).
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
-- The sky HDRI is only used for lighting and reflections; the background is still the flat sky colour. Use it (or a matching skybox) as the background with the real level art — M16. Its sun is within 5° of `SUN_OFFSET`; keep them together.
+- The sky HDRI is only used for lighting and reflections; the background is still the flat sky colour. Use it (or a matching skybox) as the background with the real level art — M16.6 uses a night HDRI on the Proving Ground. Its sun is within 5° of `SUN_OFFSET`; keep them together.
 - The main menu card covers most of the car at spawn, so a paint change shows only on its rear. A garage/showroom view (camera orbiting the car beside the menu) would show it off — M17 with the level select, or M19.
-- Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16).
+- Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16.6).
 - `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
-- Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M16). Marks are drawn on any ground the wheels touch, including ramps.
+- Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M16.6). Marks are drawn on any ground the wheels touch, including ramps.
 - The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.
 - Volume can only be set with the mouse (sliders) or muted with M; keyboard and gamepad navigation of the sliders belongs to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
-- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with M16 surfaces. Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
+- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with M16.6 surfaces. Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
 - The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M19).
-- Handling (M15) was tuned with the headless sim (`npm run sim:car`) plus a short playtest. The sim's drivers are crude (a P-controller on slide angle), so its numbers say "can be caught" or "can be held", not how it feels. Re-run it after level or tuning changes (M16/M17), since the void ring and the 80 m gap are sized to the glide.
+- Handling (M15) was tuned with the headless sim (`npm run sim:car`) plus a short playtest. The sim's drivers are crude (a P-controller on slide angle), so its numbers say "can be caught" or "can be held", not how it feels. Re-run it after level or tuning changes (M16.x/M17), since the void ring and the 80 m gap are sized to the glide.
 - Assists are two fixed presets; the M18 settings menu could expose them one by one (e.g. counter-steer off with drift hold on). Holding full lock after a handbrake on Beginner turns a tight donut. On Pro it spins, unless you counter-steer.
 - Drifts have no sound of their own beyond the tyre squeal, and no score; drift scoring could be an M17 mode.
+- Reveal (M16) ideas for later:
+  - an attract mode on the main menu where the car flies the reveal on autopilot, like the real pre-programmed run;
+  - broadcast-style stunt cameras and an instant replay of the last stunt;
+  - a separate compressed-air tank for the jets instead of sharing the fuel bar;
+  - a debug overlay of force arrows (suction, lift, grip) like the pplx reconstruction;
+  - parked cars you can knock over.
+- Half-loop (M16.1 sim, no fans): from ~30 m/s the car rides the curve with the suspension fully compressed (0.10 m) from about 20° up, so its chassis scrapes; M16.2's "suspension handles the curvature" check should start here (stiffer springs under load, more travel, or a gentler radius). Without `FIX_INTERNAL_EDGES` on the trimesh it stops dead; keep the flag on any future trimesh pieces.
+- The chase cam on the Proving Ground still uses world up: on the loop's vertical section it sits behind and below the car, looking up at it (M16.2 follows the car's up vector on surfaces).
+- Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's south straight, east of spawn.

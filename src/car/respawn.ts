@@ -1,9 +1,10 @@
 import type { RapierRigidBody, useRapier } from '@react-three/rapier'
 import { Quaternion, Vector3 } from 'three'
 import { TUNING } from '../config/tuning'
+import type { Level } from '../scene/levelData'
 import type { VehicleController } from './abilities'
 
-const { spawn } = TUNING.car
+export type Spawn = Level['spawn']
 
 type Rapier = ReturnType<typeof useRapier>
 export type PhysicsWorld = Rapier['world']
@@ -120,12 +121,14 @@ function onLevelGround(
   })
 }
 
-// Puts the car at rest at the last safe point (or spawn), upright and facing its heading.
+// Puts the car at rest at the last safe point (or the level's spawn), upright and facing its
+// heading.
 // After a fall (`fellAt`, where the car fell from) it faces from there towards the safe
 // point instead, away from the drop, so holding throttle doesn't drive straight off again.
 export function placeAtSafePoint(
   state: SafePointState,
   body: RapierRigidBody,
+  spawn: Spawn,
   fellAt?: { x: number; z: number },
 ) {
   let yaw = spawn.yaw

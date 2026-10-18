@@ -42,6 +42,8 @@ Where the draw calls come from: 23 level boxes and ramps, 3 drei `<Grid>` planes
 
 The main thread only sets about 15 audio parameters per frame and wakes a 25 ms timer for the sequencer, so frames stay pinned at vsync with the CPU throttled 4×.
 
+**M16.1** (same setup, start of a run): the Proving Ground draws 72 calls and ~290k triangles per frame from spawn, against 79 calls on the Test Track; it has fewer pieces (one ground slab and grid, 4 walls, the half-loop, 5 parked boxes, 6 rings). The half-loop is one mesh of ~1.6k triangles (the trimesh collider uses the same triangles). Still at vsync, 60 fps while driving.
+
 ## Bundle
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
@@ -51,7 +53,7 @@ The main thread only sets about 15 audio parameters per frame and wakes a 25 ms 
 | `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                       |
 | `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip) |
 | `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                  |
-| `index`       | 58 kB   | 22 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files)                                                  |
+| `index`       | 70 kB   | 26 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files)                                                  |
 | `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                           |
 | `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures  |
 | sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)               |

@@ -20,7 +20,7 @@ format:
 car-model:
 	docker compose run --rm web npm run model:car
 
-# Headless handling sim: driving, jump and ring checks on the test level
+# Headless handling sim: driving, jump and ring checks on both levels
 sim:
 	docker compose run --rm web npm run sim:car
 

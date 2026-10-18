@@ -15,7 +15,7 @@ export type RaceState = {
   finalTime: number | null
   bestTime: number | null // saved best for this level
   newBest: boolean // the finished run set the best time
-  runId: number // bumped on every restart or quit; the car watches it to return to spawn
+  runId: number // bumped on every restart, quit or level change; the car watches it to return to spawn
   setCourse: (levelId: string, ringCount: number) => void
   restart: () => void
   quit: () => void
@@ -40,7 +40,9 @@ export const useRaceStore = create<RaceState>((set, get) => ({
   newBest: false,
   runId: 0,
 
-  setCourse: (levelId, ringCount) => set({ levelId, ringCount, bestTime: loadBestTime(levelId) }),
+  // A new level (picked on the main menu) sends the car to its spawn, like a quit.
+  setCourse: (levelId, ringCount) =>
+    set((s) => ({ levelId, ringCount, bestTime: loadBestTime(levelId), runId: s.runId + 1 })),
 
   restart: () =>
     set((s) => ({

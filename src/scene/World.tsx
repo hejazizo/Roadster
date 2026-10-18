@@ -5,12 +5,12 @@ import CameraRig from '../camera/CameraRig'
 import Car from '../car/Car'
 import { createTelemetry } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
+import { useLevel } from '../state/levelStore'
 import { useRaceStore } from '../state/raceStore'
 import Effects from './Effects'
 import Level from './Level'
 import Lights from './Lights'
 import Race from './Race'
-import { TEST_LEVEL } from './testLevel'
 
 const SKY_COLOR = '#87ceeb'
 
@@ -19,6 +19,7 @@ export default function World() {
   const carVisualRef = useRef<Group>(null)
   const telemetry = useRef(createTelemetry())
   const paused = useRaceStore((s) => s.paused)
+  const level = useLevel()
 
   return (
     <>
@@ -28,9 +29,10 @@ export default function World() {
         {/* Step physics before other frame callbacks so the camera reads this frame's car pose.
             Pausing skips whole steps, which freezes the car, the race clock and the rings. */}
         <Physics gravity={TUNING.world.gravity} updatePriority={-1} paused={paused}>
-          <Level level={TEST_LEVEL} />
-          <Car ref={carRef} visualRef={carVisualRef} telemetry={telemetry} />
-          <Race level={TEST_LEVEL} car={carRef} />
+          {/* Keyed by level, so a level change rebuilds its colliders and rings from scratch. */}
+          <Level key={`level-${level.id}`} level={level} />
+          <Car ref={carRef} visualRef={carVisualRef} telemetry={telemetry} spawn={level.spawn} />
+          <Race key={`race-${level.id}`} level={level} car={carRef} />
           {/* Inside Physics so the chase cam can raycast against the level. */}
           <CameraRig target={carVisualRef} body={carRef} telemetry={telemetry} />
         </Physics>

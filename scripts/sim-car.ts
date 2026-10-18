@@ -1,6 +1,7 @@
 // Headless handling sim: runs the car's own per-step code (src/car) in Rapier on a flat test
-// pad and on the test level, and prints driving, jump and ring metrics, so tuning changes can
-// be checked without playing. `npm run sim:car`.
+// pad and on the levels, and prints driving, jump, ring and course metrics, so tuning and
+// level changes can be checked without playing. `npm run sim:car`, optionally followed by
+// assist modes and/or level ids to run only those (e.g. `npm run sim:car beginner proving`).
 import { registerHooks } from 'node:module'
 
 // src/ imports leave out the `.ts` extension (Vite resolves them); add it for Node.
@@ -18,7 +19,10 @@ registerHooks({
 const { default: RAPIER } = await import('@dimforge/rapier3d-compat')
 const { Quaternion, Vector3 } = await import('three')
 const { TUNING } = await import('../src/config/tuning.ts')
-const { TEST_LEVEL, rampVertices } = await import('../src/scene/testLevel.ts')
+const { TEST_LEVEL } = await import('../src/scene/testLevel.ts')
+const { PROVING_GROUND } = await import('../src/scene/provingGround.ts')
+const { loopMesh, loopProfile, rampVertices } = await import('../src/scene/levelData.ts')
+type Level = import('../src/scene/levelData.ts').Level
 const { createAbilityState, stepAbilities } = await import('../src/car/abilities.ts')
 const { createDrivingState, stepDriving } = await import('../src/car/handling.ts')
 const { createTelemetry, stepTelemetry } = await import('../src/car/telemetry.ts')
@@ -36,8 +40,11 @@ const SOUTH = 0
 
 // ---------------------------------------------------------------- worlds
 
-type Ground = 'pad' | 'level'
+type Ground = 'pad' | Level
 
+const yawQuat = (yaw: number) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw)
+
+// The level's colliders, as Level.tsx and Race.tsx build them.
 function createWorld(ground: Ground) {
   const world = new RAPIER.World({ x: 0, y: TUNING.world.gravity[1], z: 0 })
   world.timestep = DT
@@ -46,26 +53,35 @@ function createWorld(ground: Ground) {
     world.createCollider(RAPIER.ColliderDesc.cuboid(2000, 1, 2000).setTranslation(0, -1, 0))
     return { world, rings }
   }
-  const level = TEST_LEVEL
-  for (const { center, size } of [...level.ground, ...level.platforms, ...level.walls]) {
+  const level = ground
+  const boxes = [...level.ground, ...level.platforms, ...level.walls, ...level.fleet]
+  for (const { center, size } of boxes) {
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2).setTranslation(...center),
     )
   }
   for (const ramp of level.ramps) {
     const points = new Float32Array(rampVertices(ramp).flat())
-    const yaw = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), ramp.yaw)
     world.createCollider(
       RAPIER.ColliderDesc.convexHull(points)!
         .setTranslation(...ramp.start)
-        .setRotation(yaw),
+        .setRotation(yawQuat(ramp.yaw)),
+    )
+  }
+  // As Level.tsx: without FIX_INTERNAL_EDGES the chassis catches on triangle edges.
+  for (const loop of level.loops) {
+    const { vertices, indices } = loopMesh(loop)
+    world.createCollider(
+      RAPIER.ColliderDesc.trimesh(vertices, indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+        .setTranslation(...loop.start)
+        .setRotation(yawQuat(loop.yaw)),
     )
   }
   // As Race.tsx: an upright cylinder sensor turned to face along the ring's yaw.
   for (const { center, yaw, radius } of level.rings) {
-    const q = new Quaternion()
-      .setFromAxisAngle(new Vector3(0, 1, 0), yaw)
-      .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2))
+    const q = yawQuat(yaw).multiply(
+      new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2),
+    )
     rings.push(
       world.createCollider(
         RAPIER.ColliderDesc.cylinder(TUNING.race.ringDepth / 2, radius)
@@ -126,6 +142,8 @@ function createSim(ground: Ground, position: Vec3, yaw: number, speed = 0) {
   const sim = {
     world,
     body,
+    collider,
+    rings,
     vc,
     driving,
     abilities,
@@ -367,7 +385,7 @@ type Launch = {
 function launch(launchOptions: Launch) {
   const { at, yaw, speed, hopAt, glide, glideUntil = Infinity, boost, probeZ } = launchOptions
   const { time = 12 } = launchOptions
-  const sim = createSim('level', [at[0], at[1] + REST, at[2]], yaw, speed)
+  const sim = createSim(TEST_LEVEL, [at[0], at[1] + REST, at[2]], yaw, speed)
   const start = new Vector3(...at)
   let hopped = false
   let wasAirborne = false
@@ -564,7 +582,7 @@ function hopTiming() {
 
   // Off the main island's north edge (z −150) at 15 m/s, pressing `after` s after leaving it.
   const ledge = (after: number) => {
-    const sim = createSim('level', [0, REST, -135], NORTH, 15)
+    const sim = createSim(TEST_LEVEL, [0, REST, -135], NORTH, 15)
     let left = Infinity
     while (sim.time < 3) {
       const press = sim.time >= left + after && sim.time < left + after + DT / 2
@@ -579,18 +597,176 @@ function hopTiming() {
   check('press 0.3 s after an edge does not', ledge(0.3) === 0, '')
 }
 
-const modes = (process.argv[2] ? [process.argv[2]] : Object.keys(TUNING.assists)) as AssistMode[]
+// ---------------------------------------------------------------- the Proving Ground
+
+const WEST = -Math.PI / 2
+const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
+const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
+
+// Steers towards (x, z) and holds about `speed` m/s, slower in sharp turns.
+function pursue(sim: Sim, x: number, z: number, speed: number): CarControls {
+  const { p, forward, flatSpeed } = pose(sim)
+  const error = angleDelta(Math.atan2(forward.x, forward.z), Math.atan2(x - p.x, z - p.z))
+  const target = Math.abs(error) > 0.6 ? speed / 2 : speed
+  return drive({
+    steer: clamp1(-error * 2),
+    throttle: flatSpeed < target ? 1 : flatSpeed > target + 3 ? -0.3 : 0,
+  })
+}
+
+// Drives the ring course in order: lines up on each ring's axis from 12 m out, then aims
+// through it to 10 m beyond.
+function ringCourse(level: Level) {
+  const { spawn, rings } = level
+  const sim = createSim(level, [spawn.position[0], REST, spawn.position[2]], spawn.yaw)
+  let next = 0
+  let lined = false
+  let minUp = 1
+  let fell = false
+  while (sim.time < 150 && next < rings.length) {
+    const { center, yaw } = rings[next]
+    const dx = Math.sin(yaw)
+    const dz = Math.cos(yaw)
+    const p = sim.body.translation()
+    const entry = [center[0] - dx * 12, center[2] - dz * 12]
+    if (!lined && Math.hypot(entry[0] - p.x, entry[1] - p.z) < 6) lined = true
+    const [tx, tz] = lined ? [center[0] + dx * 10, center[2] + dz * 10] : entry
+    sim.step(pursue(sim, tx, tz, 20))
+    if (sim.world.intersectionPair(sim.collider, sim.rings[next])) {
+      next++
+      lined = false
+    }
+    minUp = Math.min(minUp, pose(sim).up.y)
+    if (sim.body.translation().y < TUNING.world.killY) fell = true
+    if (fell) break
+  }
+  const result = { done: next === rings.length, next, time: sim.time, minUp, fell }
+  sim.free()
+  return result
+}
+
+// Inside the perimeter walls, above the kill height.
+const insidePad = (p: { x: number; y: number; z: number }) =>
+  p.y > TUNING.world.killY && Math.abs(p.x) < 110 && p.z > -340 && p.z < 40
+
+function provingGround() {
+  const level = PROVING_GROUND
+  section('Proving Ground')
+  const course = ringCourse(level)
+  check(
+    'ring course completes in order',
+    course.done && !course.fell && course.minUp > 0.5,
+    `${course.next}/${level.rings.length} rings, ${f1(course.time)} s, min up ${f2(course.minUp)}`,
+  )
+
+  // Half-loop without suction: hold a speed to the foot, lift off the throttle once on the
+  // ramp, and see how high it gets before sliding back or dropping off.
+  const loop = level.loops[0]
+  const { minRadius } = loopProfile(loop)
+  info('half-loop', `${loop.height} m tall, radius ${f1(minRadius)} m after the entry`)
+  const runs: [number, boolean][] = [
+    [12, false],
+    [16, false],
+    [20, false],
+    [30, false],
+    [45, true],
+  ]
+  for (const [v, boost] of runs) {
+    const at: Vec3 = [loop.start[0], REST, loop.start[2] + 30]
+    const sim = createSim(level, at, NORTH, v)
+    let peak = 0
+    let onRamp = false
+    let arrival = 0
+    let minUp = 1
+    while (sim.time < 12) {
+      const s = pose(sim)
+      if (s.p.y > 1.5 && !onRamp) arrival = s.speed
+      if (s.p.y > 1.5) onRamp = true
+      const below = s.flatSpeed < v
+      sim.step(drive({ throttle: !onRamp && below ? 1 : 0, boost: boost && !onRamp }))
+      peak = Math.max(peak, sim.body.translation().y)
+      minUp = Math.min(minUp, pose(sim).up.y)
+    }
+    const end = sim.body.translation()
+    // Back on the asphalt, upright or not, and neither stuck on the loop nor behind it (its
+    // back is ~17 m past the entry).
+    const back = insidePad(end) && end.y < 2.5 && end.z > loop.start[2] - 8
+    check(
+      `${v} m/s${boost ? ' + boost' : ''}: ends back on the pad`,
+      back,
+      `arrives ${f1(arrival)} m/s, peak ${f1(peak)} m, ${minUp < 0 ? 'turned over' : 'upright'}, ends y ${f1(end.y)} z ${f1(end.z)}`,
+    )
+    sim.free()
+  }
+
+  // The fleet: driving into the back of the row bounces off the first car.
+  const sedanTail = level.fleet[0].center[2] + level.fleet[0].size[2] / 2
+  for (const v of [20, 30]) {
+    const x = level.fleet[0].center[0]
+    const sim = createSim(level, [x, REST, sedanTail + 40], NORTH, v)
+    let minZ = Infinity
+    let minUp = 1
+    while (sim.time < 5) {
+      sim.step(drive({ throttle: 1 }))
+      minZ = Math.min(minZ, sim.body.translation().z)
+      minUp = Math.min(minUp, pose(sim).up.y)
+    }
+    const end = sim.body.translation()
+    check(
+      `fleet at ${v} m/s: stopped by the first car`,
+      minZ > sedanTail - 1 && insidePad(end),
+      `nose reaches z ${f1(minZ - TUNING.car.chassis.halfExtents[2])} (sedan tail ${f1(sedanTail)}), min up ${f2(minUp)}`,
+    )
+    sim.free()
+  }
+
+  // The perimeter wall holds a boosted car.
+  const sim = createSim(level, [0, REST, -150], WEST, 45)
+  let minX = Infinity
+  while (sim.time < 6) {
+    sim.step(drive({ throttle: 1, boost: true }))
+    minX = Math.min(minX, sim.body.translation().x)
+  }
+  check(
+    'west wall at 45 m/s + boost: holds',
+    minX > -110 && insidePad(sim.body.translation()),
+    `min x ${f1(minX)}`,
+  )
+  sim.free()
+}
+
+// Positional arguments pick assist modes and/or levels; none means all of them.
+const LEVEL_IDS = [TEST_LEVEL.id, PROVING_GROUND.id]
+const args = process.argv.slice(2)
+const unknown = args.filter((a) => !(a in TUNING.assists) && !LEVEL_IDS.includes(a))
+if (unknown.length) {
+  console.error(
+    `Unknown argument(s): ${unknown.join(', ')}. Use assist modes and/or ${LEVEL_IDS.join(', ')}.`,
+  )
+  process.exit(2)
+}
+const pick = <T extends string>(all: T[]) => {
+  const chosen = all.filter((x) => args.includes(x))
+  return chosen.length ? chosen : all
+}
+const modes = pick(Object.keys(TUNING.assists) as AssistMode[])
+const levels = pick(LEVEL_IDS)
+
 for (const m of modes) {
   mode = m
   rows.push('', `######## Assists: ${m}`)
-  straightLine()
-  skidpad()
-  stepSteer()
-  slalom()
-  handbrakeDrift()
-  jumps()
-  rings()
-  hopTiming()
+  // Pad driving and the test level.
+  if (levels.includes(TEST_LEVEL.id)) {
+    straightLine()
+    skidpad()
+    stepSteer()
+    slalom()
+    handbrakeDrift()
+    jumps()
+    rings()
+    hopTiming()
+  }
+  if (levels.includes(PROVING_GROUND.id)) provingGround()
 }
 
 console.log(`Rest height ${REST.toFixed(3)} m`)

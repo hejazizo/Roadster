@@ -4,8 +4,10 @@ import { CAR_MODEL_CREDIT } from '../config/assets'
 import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
 import { PAINTS } from '../config/paints'
 import { onPress } from '../input/input'
+import { LEVELS } from '../scene/levels'
 import { ASSIST_MODES, useAssistStore } from '../state/assistStore'
 import { useInputStore } from '../state/inputStore'
+import { useLevelStore } from '../state/levelStore'
 import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
 import { formatTime } from './formatTime'
@@ -79,6 +81,8 @@ function useMenuInput() {
         else if (action === 'back' && screen !== 'main') quit()
         else if (screen === 'main' && (action === 'prev' || action === 'next')) {
           pick(() => usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1))
+        } else if (screen === 'main' && action === 'level') {
+          pick(() => useLevelStore.getState().cycleLevel())
         } else if (screen !== 'results' && action === 'assists') {
           pick(() => useAssistStore.getState().cycleMode())
         }
@@ -196,6 +200,36 @@ function AssistPicker() {
   )
 }
 
+// Level choice on the main menu, a segmented pair like the assists.
+function LevelPicker() {
+  const levelId = useLevelStore((s) => s.levelId)
+  const device = useInputStore((s) => s.device)
+  return (
+    <div className="menu-assists">
+      <div className="menu-paint-label">
+        <span className="hud-label">Level</span>
+        <kbd className="menu-key">{bindingLabel(['level'], device)}</kbd>
+      </div>
+      <div className="menu-segments" role="radiogroup" aria-label="Level">
+        {LEVELS.map(({ level: { id }, name }) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={id === levelId}
+            tabIndex={-1}
+            className={`menu-segment${id === levelId ? ' is-selected' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => pick(() => useLevelStore.getState().setLevel(id))}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MainMenu() {
   const bestTime = useRaceStore((s) => s.bestTime)
   const device = useInputStore((s) => s.device)
@@ -204,6 +238,7 @@ function MainMenu() {
       <div className="menu-card">
         <h1 className="menu-title">Roadster</h1>
         <div className="menu-subtitle">Ring time trial</div>
+        <LevelPicker />
         <div className="menu-best">
           {bestTime === null ? (
             'No best time yet'
