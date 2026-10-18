@@ -176,12 +176,36 @@ Each milestone here is independent enough to do in any order, apart from M11 →
 
 ### M11 — Hero Roadster model
 
-- Get the final model: model it in Blender from reference photos and published dimensions, commission an artist, or buy one **whose license allows use in a game** (avoid "editorial use only"). Don't use ripped or unlicensed files.
-- For a commercial release, use an "inspired-by" design without Tesla names or logos unless licensed.
-- Follow `docs/car-model-spec.md`: separate wheels, doors, thruster nozzles; correct scale and axis.
-- Budget ~50k–150k triangles; compress with Draco/Meshopt (`gltf-transform`), KTX2 textures.
+**Model chosen:** [Tesla Roadtser 2026](https://sketchfab.com/3d-models/tesla-roadtser-2026-7630c9fe842d4f5ea86fc1f122753b89) by asiphy007 on Sketchfab, **CC BY 4.0** (commercial use allowed, author must be credited). From the Sketchfab API on 2026-10-17: 500k triangles, 250k vertices, **1 material, 1 texture**, no animations, published 2026-10-17. Downloads: original `.glb` (29 MB), plus converted glTF/USDZ and 2k/1k-texture GLBs.
 
-**Done when:** the hero car drops in with no code changes beyond the asset path.
+**Inspected 2026-10-18.** The file is `assets/roadster-2026/source/source/tesla roadtser 2026.glb` (28.6 MB). Units below are file units; the file isn't in metres.
+
+- **Structure:** one node `model`, one mesh with one primitive: 500k triangles, 632k vertices (250k after welding; the rest are UV-seam splits), with POSITION, NORMAL and TEXCOORD_0. No animations or skins. The mesh is an auto-generated UV atlas with lighting baked into the texture, the usual output of an AI image-to-3D tool.
+- **Material:** one material. Its base colour is **black** and the 2048² PNG texture sits in the **emissive** slot, so as shipped it renders unlit: it ignores scene lights and shadows. The build has to move the texture to base colour (roughness ≈ 0.5, metalness 0) and clear the emissive. The baked shading stays in the texture, so lighting is applied twice, mildly. That's acceptable for now; M12 deals with materials.
+- **Axes:** already +Y up and **nose towards +Z**, with the ground at y = 0. No rotation is needed.
+- **Size:** x −0.413…0.412, y 0…0.502, z −0.946…0.951, so 0.83 wide × 0.50 tall × 1.90 long.
+- **Wheels:**
+  - The **rear wheels are separate islands** (65.5k and 62.7k triangles), centred at x ≈ ±0.33, y ≈ 0.145, z ≈ −0.628, with radius ≈ 0.145 and width ≈ 0.16.
+  - The **front wheels are fused into the body** (one 372k-triangle island), centred at z ≈ 0.525, with roughly the same radius and track.
+  - The wheels don't match: the rear ones and the front-right are 5-spoke, while the front-left has a malformed hub.
+- **At physics scale:** fitting the wheelbase (1.153 file units) to the physics 2.6 m means a scale of ≈ 2.25. The car becomes ≈ 4.27 m long, 1.86 m wide and 1.13 m tall, with wheels of radius ≈ 0.33 m and width 0.36 m, and a track of ±0.74 m. The current tuning has 0.4 m wheels at ±0.85 m and a 1.8 × 0.6 × 4.0 m collider.
+- **Branding:** no Tesla badges or readable text. The rear plate is illegible, and the design reads as a generic wedge supercar.
+- **Thruster spots:** four round vents in the rear diffuser below the plate, and two small cylindrical stubs at the lower rear corners.
+- **Extra files:** `source/textures/shaded_0.png` is the embedded texture flipped vertically, so it's redundant. `.DS_Store` files are in the folder and `.gitignore` doesn't cover them.
+
+1. **Tidy the source:** move the GLB to `assets/roadster-2026/source.glb`, drop the duplicate PNG and the `.DS_Store` files, add `.DS_Store` to `.gitignore`, and commit the source like the Kenney kit (29 MB, under GitHub's 100 MB file limit).
+2. **Build script:** `scripts/build-car-model.ts` only handles the Kenney source (its node names, translated-only wheels). Extend it with a second source, or add a sibling script, so that `npm run model:car` / `make car-model` output the hero car in the `docs/car-model-spec.md` layout:
+   - scale it uniformly to fit the physics wheelbase, origin at the chassis-box centre (axes already match);
+   - **wheels:** take one rear-wheel island as the template. Re-centre it on its hub with the axle on X, and use copies for all four `wheel_*` nodes, mirrored for the other side. Cut the fused front wheels out of the body: drop the triangles inside a cylinder around each front hub, then check the arches for holes. Remove the other rear island too. One template gives four matching wheels and gets rid of the malformed front-left hub;
+   - move the texture from emissive to base colour (see findings);
+   - `thruster_left` / `thruster_right` empties at the rear stubs or the outer diffuser vents;
+   - decimate to ~100–150k triangles (`weld` + `simplify`), Meshopt-compress, keep the texture at 2k and compress it (KTX2 if `toktx` is available in the container, otherwise WebP). Aim for a `car.glb` of about 5 MB or less, and record the size and triangle count in `docs/performance.md`.
+3. **Fit the physics to the car, as tuning only:** wheel radius ≈ 0.33, width ≈ 0.36, track ±0.74, wheelbase kept at 2.6 m, and a collider of about 1.8 × ? × 4.2 m sized to the body. Then rebuild the GLB. Smaller wheels change ride height and handling, so re-check with a headless sim like earlier milestones: every ring is still reachable, and the 80 m gap still needs a glide.
+4. **Credit (required by CC BY):** a credit line in the main menu, the README, and the source section of `docs/car-model-spec.md`, plus `assets/roadster-2026/LICENSE.txt`. Each needs the title, author, source link and licence link, and a note that the model was modified (decimated, wheels rebuilt from one template, material changed).
+5. **Trademark and provenance:** CC BY only covers the modeller's copyright, not Tesla's name, logos or design. Keep "Tesla" out of the game's title and UI. The model has no badges, so the free hobby deploy is fine as it is; a commercial release should still get a check that it doesn't copy Tesla's design. The model looks AI-generated, so it's unlikely to be ripped from a game, but the uploader's licence is only their word. If it turns out to be someone else's work, drop it and fall back to modelling one or buying one licensed for games (not "editorial use only").
+6. Replace the _Placeholder_ section of `docs/car-model-spec.md` with a _Hero model_ section. Keep `assets/car-kit/` as a fallback source.
+
+**Done when:** the Roadster replaces the placeholder with no code changes beyond the asset, tuning and the credit line. No spec warnings appear in the console, the car is ≤150k triangles, its wheels spin and steer inside their arches, and `dev`, `build` and `lint` pass.
 
 ### M12 — Lighting & materials
 
@@ -274,3 +298,4 @@ Park later ideas here instead of building them early.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
 - The placeholder body is longer than the 4 m chassis collider (4.55 m, nose ~0.57 m ahead of it), so the nose can dip into walls on a head-on hit, and its arches are modelled for bigger wheels than the physics' 0.4 m. Fit the collider (and maybe wheel size) to the hero model in M11, as a tuning change.
 - The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.
+- The hero model (M11) ships with one material and one baked texture, so M12's clearcoat paint, glass and emissive lights need it split into separate materials first, by texture region or by mesh selection in the build script. Paint-colour choice (M12/M17) also needs the paint isolated from the baked texture, for example with a mask.
