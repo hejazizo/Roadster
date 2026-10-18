@@ -54,12 +54,24 @@
   background: #4cc9f0;
 }
 
+.hud-fans-fill {
+  height: 100%;
+  background: #e9ecef;
+}
+
 .hud-fuel.is-draining .hud-fuel-fill {
   background: #ff8c1a;
 }
 
 .hud-fuel.is-empty .hud-fuel-track {
   background: rgba(230, 57, 70, 0.6);
+}
+
+.hud-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .hud-status {
@@ -86,6 +98,11 @@
 
 .hud-status.is-drifting {
   background: #9b5de5;
+}
+
+.hud-status.is-wall,
+.hud-status.is-ceiling {
+  background: #e63946;
 }
 
 .race-panel {

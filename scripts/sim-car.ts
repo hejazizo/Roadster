@@ -28,6 +28,7 @@ const { createDrivingState, stepDriving } = await import('../src/car/handling.ts
 const { createTelemetry, stepTelemetry } = await import('../src/car/telemetry.ts')
 const { released } = await import('../src/car/useCarControls.ts')
 type CarControls = import('../src/car/useCarControls.ts').CarControls
+type Assist = import('../src/car/handling.ts').Assist
 type Vec3 = [number, number, number]
 type AssistMode = keyof typeof TUNING.assists
 
@@ -49,9 +50,10 @@ function createWorld(ground: Ground) {
   const world = new RAPIER.World({ x: 0, y: TUNING.world.gravity[1], z: 0 })
   world.timestep = DT
   const rings: InstanceType<typeof RAPIER.Collider>[] = []
+  const loops: InstanceType<typeof RAPIER.Collider>[] = []
   if (ground === 'pad') {
     world.createCollider(RAPIER.ColliderDesc.cuboid(2000, 1, 2000).setTranslation(0, -1, 0))
-    return { world, rings }
+    return { world, rings, loops }
   }
   const level = ground
   const boxes = [...level.ground, ...level.platforms, ...level.walls, ...level.fleet]
@@ -71,10 +73,12 @@ function createWorld(ground: Ground) {
   // As Level.tsx: without FIX_INTERNAL_EDGES the chassis catches on triangle edges.
   for (const loop of level.loops) {
     const { vertices, indices } = loopMesh(loop)
-    world.createCollider(
-      RAPIER.ColliderDesc.trimesh(vertices, indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
-        .setTranslation(...loop.start)
-        .setRotation(yawQuat(loop.yaw)),
+    loops.push(
+      world.createCollider(
+        RAPIER.ColliderDesc.trimesh(vertices, indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+          .setTranslation(...loop.start)
+          .setRotation(yawQuat(loop.yaw)),
+      ),
     )
   }
   // As Race.tsx: an upright cylinder sensor turned to face along the ring's yaw.
@@ -91,7 +95,7 @@ function createWorld(ground: Ground) {
       ),
     )
   }
-  return { world, rings }
+  return { world, rings, loops }
 }
 
 // ---------------------------------------------------------------- the car
@@ -102,8 +106,15 @@ type Sim = ReturnType<typeof createSim>
 let mode: AssistMode = 'beginner'
 
 // The car as Car.tsx sets it up, stepped in the same order as its useBeforePhysicsStep.
-function createSim(ground: Ground, position: Vec3, yaw: number, speed = 0) {
-  const { world, rings } = createWorld(ground)
+// `assistOverride` replaces some of the mode's assist values (e.g. no automatic fans).
+function createSim(
+  ground: Ground,
+  position: Vec3,
+  yaw: number,
+  speed = 0,
+  assistOverride: Partial<Assist> = {},
+) {
+  const { world, rings, loops } = createWorld(ground)
   const rot = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw)
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
@@ -133,7 +144,8 @@ function createSim(ground: Ground, position: Vec3, yaw: number, speed = 0) {
   const abilities = createAbilityState()
   const telemetry = createTelemetry()
   const ringsHit = new Set<number>()
-  const assist = TUNING.assists[mode]
+  let riding = 0 // s on all four wheels
+  const assist = { ...TUNING.assists[mode], ...assistOverride }
   const probe = {
     world,
     ray: new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
@@ -150,8 +162,12 @@ function createSim(ground: Ground, position: Vec3, yaw: number, speed = 0) {
     telemetry,
     ringsHit,
     time: 0,
+    // Steps the chassis touched a half-loop, and the shortest suspension seen, both while
+    // riding on all four wheels (maxTravel short of the rest length means bottomed out).
+    scrapes: 0,
+    minSuspension: Infinity,
     step(c: CarControls) {
-      stepDriving(driving, body, vc, c, DT, assist)
+      stepDriving(driving, body, vc, c, DT, assist, abilities.suction > 0)
       vc.updateVehicle(DT, probe.flags)
       stepAbilities(abilities, body, vc, c, DT, assist, probe)
       stepTelemetry(telemetry, body, vc, c, DT)
@@ -160,6 +176,24 @@ function createSim(ground: Ground, position: Vec3, yaw: number, speed = 0) {
       rings.forEach((ring, i) => {
         if (world.intersectionPair(collider, ring)) ringsHit.add(i)
       })
+      // Only once riding on all four wheels for a moment: a hard landing or a car tumbling
+      // back down the ramp touches it too.
+      let scraped = false
+      let allWheels = true
+      for (let i = 0; i < vc.numWheels(); i++) allWheels &&= vc.wheelIsInContact(i)
+      riding = allWheels ? riding + DT : 0
+      for (const loop of riding > 0.5 ? loops : []) {
+        world.contactPair(collider, loop, (manifold) => {
+          if (manifold.numContacts() > 0) scraped = true
+        })
+      }
+      if (scraped) sim.scrapes++
+      for (let i = 0; i < vc.numWheels(); i++) {
+        const length = vc.wheelSuspensionLength(i)
+        if (riding > 0.5 && length !== null) {
+          sim.minSuspension = Math.min(sim.minSuspension, length)
+        }
+      }
     },
     free: () => world.free(),
   }
@@ -199,10 +233,10 @@ function pose(sim: Sim) {
 const deg = (rad: number) => (rad * 180) / Math.PI
 const grounded = (sim: Sim) => sim.telemetry.grounded
 
-// Rest height of the chassis centre above flat ground.
-function measureRestHeight() {
+// Rest height of the chassis centre above flat ground (optionally with the fans held).
+function measureRestHeight(fans = false) {
   const sim = createSim('pad', [0, 2, 0], 0)
-  for (let i = 0; i < 300; i++) sim.step({ ...released(), handbrake: true })
+  for (let i = 0; i < 300; i++) sim.step({ ...released(), handbrake: true, fans })
   const y = sim.body.translation().y
   sim.free()
   return y
@@ -659,45 +693,7 @@ function provingGround() {
     `${course.next}/${level.rings.length} rings, ${f1(course.time)} s, min up ${f2(course.minUp)}`,
   )
 
-  // Half-loop without suction: hold a speed to the foot, lift off the throttle once on the
-  // ramp, and see how high it gets before sliding back or dropping off.
-  const loop = level.loops[0]
-  const { minRadius } = loopProfile(loop)
-  info('half-loop', `${loop.height} m tall, radius ${f1(minRadius)} m after the entry`)
-  const runs: [number, boolean][] = [
-    [12, false],
-    [16, false],
-    [20, false],
-    [30, false],
-    [45, true],
-  ]
-  for (const [v, boost] of runs) {
-    const at: Vec3 = [loop.start[0], REST, loop.start[2] + 30]
-    const sim = createSim(level, at, NORTH, v)
-    let peak = 0
-    let onRamp = false
-    let arrival = 0
-    let minUp = 1
-    while (sim.time < 12) {
-      const s = pose(sim)
-      if (s.p.y > 1.5 && !onRamp) arrival = s.speed
-      if (s.p.y > 1.5) onRamp = true
-      const below = s.flatSpeed < v
-      sim.step(drive({ throttle: !onRamp && below ? 1 : 0, boost: boost && !onRamp }))
-      peak = Math.max(peak, sim.body.translation().y)
-      minUp = Math.min(minUp, pose(sim).up.y)
-    }
-    const end = sim.body.translation()
-    // Back on the asphalt, upright or not, and neither stuck on the loop nor behind it (its
-    // back is ~17 m past the entry).
-    const back = insidePad(end) && end.y < 2.5 && end.z > loop.start[2] - 8
-    check(
-      `${v} m/s${boost ? ' + boost' : ''}: ends back on the pad`,
-      back,
-      `arrives ${f1(arrival)} m/s, peak ${f1(peak)} m, ${minUp < 0 ? 'turned over' : 'upright'}, ends y ${f1(end.y)} z ${f1(end.z)}`,
-    )
-    sim.free()
-  }
+  halfLoop(level)
 
   // The fleet: driving into the back of the row bounces off the first car.
   const sedanTail = level.fleet[0].center[2] + level.fleet[0].size[2] / 2
@@ -735,6 +731,193 @@ function provingGround() {
   sim.free()
 }
 
+// Half-loop runs: hold `speed` to the foot of the loop (boosting on the run-up if asked), then
+// hand over to `onRamp` once the car is on it.
+type LoopRun = {
+  speed: number
+  boost?: boolean
+  fans: boolean // false: automatic fans off too
+  onRamp: (sim: Sim) => CarControls
+}
+
+function loopRun(level: Level, { speed, boost, fans, onRamp }: LoopRun) {
+  const loop = level.loops[0]
+  const at: Vec3 = [loop.start[0], REST, loop.start[2] + 30]
+  const sim = createSim(level, at, NORTH, speed, fans ? {} : { autoFans: 0 })
+  let peak = 0
+  let arrival = 0
+  let ramp = false
+  let runUpMinUp = 1
+  let minUp = 1
+  // Rode the inverted top on its wheels: in contact with a ceiling past ~160°.
+  let overTop = false
+  let topSpeed = NaN
+  while (sim.time < 14) {
+    const s = pose(sim)
+    if (s.p.y > 1.5 && !ramp) {
+      arrival = s.speed
+      ramp = true
+    }
+    if (!ramp) runUpMinUp = Math.min(runUpMinUp, s.up.y)
+    const c = ramp
+      ? onRamp(sim)
+      : drive({ throttle: s.flatSpeed < speed ? 1 : 0, boost: !!boost && s.flatSpeed < speed })
+    sim.step(c)
+    const after = pose(sim)
+    peak = Math.max(peak, after.p.y)
+    minUp = Math.min(minUp, after.up.y)
+    if (grounded(sim) && sim.abilities.hold === 'ceiling' && after.up.y < -0.95) {
+      if (!overTop) topSpeed = after.speed
+      overTop = true
+    }
+  }
+  const end = sim.body.translation()
+  // Back on the asphalt, upright or not, and neither stuck on the loop nor behind it (its
+  // back is ~17 m past the entry).
+  const back = insidePad(end) && end.y < 2.5 && end.z > loop.start[2] - 8
+  const result = {
+    sim,
+    arrival,
+    peak,
+    runUpMinUp,
+    minUp,
+    overTop,
+    topSpeed,
+    back,
+    end,
+    scrapes: sim.scrapes,
+    minSuspension: sim.minSuspension,
+  }
+  sim.free()
+  return result
+}
+
+const surfaceSpeed = (sim: Sim) => {
+  const { v, up } = pose(sim)
+  const vel = new Vector3(v.x, v.y, v.z)
+  return vel.addScaledVector(up, -vel.dot(up)).length()
+}
+
+// Fans-on driver: throttle (and boost when slow) up the ramp until upside down, stop there on
+// the hold brake for `hold` s, then drive on off the lip. Pro holds the fans; Beginner leaves
+// them to the assist.
+function fansDriver(hold: number) {
+  let phase: 'climb' | 'stop' | 'go' = 'climb'
+  let stoppedAt = 0
+  // `creep`: how far the parked car moves from half a second into the hold to its end.
+  const stats = { holdTime: 0, creep: NaN, fuelAtStop: NaN, fuelAtGo: NaN, leftLip: false }
+  let parked: InstanceType<typeof Vector3> | null = null
+  const onRamp = (sim: Sim): CarControls => {
+    const { up } = pose(sim)
+    const on = grounded(sim)
+    const fans = mode === 'pro'
+    if (phase === 'climb' && on && up.y < -0.8) {
+      phase = 'stop'
+      stoppedAt = sim.time
+      stats.fuelAtStop = sim.abilities.fuel
+    }
+    if (phase === 'stop') {
+      const ceiling = on && sim.abilities.hold === 'ceiling'
+      if (ceiling && surfaceSpeed(sim) < 0.5) stats.holdTime += DT
+      const p = sim.body.translation()
+      if (stats.holdTime > 0.5) {
+        // Along the surface only: the springs settling as the fans spool isn't creep.
+        parked ??= new Vector3(p.x, p.y, p.z)
+        const { up } = pose(sim)
+        const moved = new Vector3(p.x, p.y, p.z).sub(parked)
+        stats.creep = moved.addScaledVector(up, -moved.dot(up)).length()
+      }
+      if (sim.time - stoppedAt > hold + 1) {
+        phase = 'go'
+        stats.fuelAtGo = sim.abilities.fuel
+      }
+      // Brake to a stop; once slow, the fans' hold brake parks it.
+      return drive({ throttle: surfaceSpeed(sim) > 2 ? -1 : 0, fans })
+    }
+    if (phase === 'go') {
+      if (!on && up.y < -0.5) stats.leftLip = true
+      return stats.leftLip ? released() : drive({ throttle: 1, fans })
+    }
+    // Past vertical, brake down to a crawl so it stops before the lip.
+    const speed = surfaceSpeed(sim)
+    if (up.y < 0 && speed > 4) return drive({ throttle: -1, fans })
+    return drive({ throttle: 1, boost: speed < 6, fans })
+  }
+  return { onRamp, stats }
+}
+
+function halfLoop(level: Level) {
+  const loop = level.loops[0]
+  const { minRadius } = loopProfile(loop)
+  const g = -TUNING.world.gravity[1]
+  info(
+    'half-loop',
+    `${loop.height} m tall, radius ${f1(minRadius)} m after the entry, loop speed √(g·r) ${f1(Math.sqrt(g * minRadius))} m/s`,
+  )
+
+  // Without fans: hold a speed to the foot, lift off the throttle once on the ramp, and see
+  // how high it gets before sliding back or dropping off. The suspension should keep the
+  // chassis off the ramp at any speed up to 35 m/s.
+  const coast = () => released()
+  const runs: [number, boolean][] = [
+    [12, false],
+    [16, false],
+    [20, false],
+    [25, false],
+    [30, false],
+    [35, true],
+    [45, true],
+  ]
+  for (const [v, boost] of runs) {
+    const r = loopRun(level, { speed: v, boost, fans: false, onRamp: coast })
+    check(
+      `no fans, ${v} m/s${boost ? ' + boost' : ''}: ends back on the pad`,
+      r.back && r.runUpMinUp > 0.9 && (v > 35 || r.scrapes === 0),
+      `arrives ${f1(r.arrival)} m/s, peak ${f1(r.peak)} m, ${r.overTop ? 'over the top' : 'falls off'}, ${r.minUp < 0 ? 'turned over' : 'upright'}, chassis contact ${r.scrapes} steps, min susp ${f2(r.minSuspension)} m, ends y ${f1(r.end.y)} z ${f1(r.end.z)}`,
+    )
+  }
+  // The slowest arrival that rides over the inverted top without fans.
+  let fansOff = NaN
+  for (let v = 14; v <= 40; v++) {
+    const r = loopRun(level, { speed: v, boost: v > 30, fans: false, onRamp: coast })
+    if (r.overTop) {
+      fansOff = r.arrival
+      info(
+        'no fans: slowest over the top',
+        `arrives ${f1(r.arrival)} m/s, ${f1(r.topSpeed)} m/s at the top`,
+      )
+      break
+    }
+  }
+
+  // With fans: from the slowest approach that still makes it, climb, hold inverted for 3 s
+  // and drive on off the lip.
+  let slowest: (ReturnType<typeof loopRun> & ReturnType<typeof fansDriver>['stats']) | null = null
+  for (let v = 10; v <= 30 && !slowest; v++) {
+    const driver = fansDriver(3)
+    const r = loopRun(level, { speed: v, fans: true, onRamp: driver.onRamp })
+    const s = driver.stats
+    if (s.holdTime >= 3 && s.leftLip && r.back) slowest = { ...r, ...s }
+  }
+  check(
+    'fans: climbs slowly, holds inverted 3 s, drives off',
+    !!slowest && slowest.arrival < fansOff - 5,
+    slowest
+      ? `from ${f1(slowest.arrival)} m/s (no fans needs ${f1(fansOff)}), held ${f1(slowest.holdTime)} s (creep ${f2(slowest.creep)} m), fuel ${f2(slowest.fuelAtStop)} at the stop, ${f2(slowest.fuelAtGo)} after, ends y ${f1(slowest.end.y)} z ${f1(slowest.end.z)}`
+      : 'never held',
+  )
+  for (const v of [20, 25]) {
+    const driver = fansDriver(3)
+    const r = loopRun(level, { speed: v, fans: true, onRamp: driver.onRamp })
+    const s = driver.stats
+    check(
+      `fans from ${v} m/s: holds inverted 3 s, drives off`,
+      s.holdTime >= 3 && s.creep < 0.1 && s.leftLip && r.back && r.runUpMinUp > 0.9,
+      `held ${f1(s.holdTime)} s (creep ${f2(s.creep)} m), fuel ${f2(s.fuelAtStop)} → ${f2(s.fuelAtGo)}, chassis contact ${r.scrapes} steps, ends y ${f1(r.end.y)} z ${f1(r.end.z)}`,
+    )
+  }
+}
+
 // Positional arguments pick assist modes and/or levels; none means all of them.
 const LEVEL_IDS = [TEST_LEVEL.id, PROVING_GROUND.id]
 const args = process.argv.slice(2)
@@ -769,7 +952,7 @@ for (const m of modes) {
   if (levels.includes(PROVING_GROUND.id)) provingGround()
 }
 
-console.log(`Rest height ${REST.toFixed(3)} m`)
+console.log(`Rest height ${REST.toFixed(3)} m (fans held ${measureRestHeight(true).toFixed(3)} m)`)
 console.log(rows.join('\n'))
 console.log(`\n${failures === 0 ? 'All checks passed.' : `${failures} check(s) failed.`}`)
 process.exitCode = failures === 0 ? 0 : 1

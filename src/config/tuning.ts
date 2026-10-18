@@ -35,6 +35,11 @@ export const TUNING = {
       compression: 4.4,
       relaxation: 2.3,
       maxForce: 100000,
+      // Bump stop: towards the end of its travel the spring and its damping stiffen, so tight
+      // curves taken fast (the half-loop) don't bottom out onto the chassis.
+      bumpStart: 0.6, // fraction of travel (from rest length to fully compressed) where it starts
+      bumpStiffness: 4, // × stiffness and damping at full compression
+      bumpDelay: 0.25, // s after a touchdown before it starts fading in (over as long again)
     },
     // Grip curve: a tyre holds full grip up to the peak slip angle (between where it points
     // and where it's going), then fades to slideGrip as the slide grows, so a slide keeps
@@ -130,6 +135,21 @@ export const TUNING = {
       plainFactor: 0.35, // angles and yaw control while airborne without gliding
       groundProbe: 6, // m, below this the car levels to the ground's slope instead of flat
     },
+    // Underbody fans: held (or automatic on steep surfaces on Beginner), they pull the car
+    // into the surface its wheels touch, just enough to keep `holdG` pressing it on: none on
+    // the floor, 1 g on a wall, 2 g on a ceiling, never more than `maxG`. They don't push the
+    // car along; climbing a wall slowly takes boost.
+    suction: {
+      maxG: 2, // g, the most the fans pull
+      holdG: 1, // g of load into the surface the fans keep up
+      spoolRate: 6, // 1/s, how quickly the fans spin up and down
+      fuelPerSecond: 0.12, // at full suction
+      holdBrake: 10, // brake with no throttle while the fans hold the car, so it parks on a wall…
+      holdSpeed: 3, // m/s, …once it's slower than this
+      parkStiffness: 10, // 1/s, how firmly a parked car stays where it stopped (static friction)
+      autoAngle: 0.52, // rad, surfaces steeper than this engage the fans on their own (assist)…
+      autoRelease: 0.35, // …until the surface is flatter than this
+    },
     // Touchdown settling: spin is damped for a moment after a landing.
     landing: {
       minAirTime: 0.25, // s airborne before a touchdown counts
@@ -156,6 +176,7 @@ export const TUNING = {
       tractionControl: 0.8, // 0–1, engine cut when the rear slides without a drift
       airLevel: 1.5, // × airControl.levelRate
       landing: 1, // × landing.spinDamping
+      autoFans: 1, // 1 = fans engage on their own on steep surfaces, 0 = only when held
     },
     pro: {
       counterSteer: 0,
@@ -165,6 +186,7 @@ export const TUNING = {
       tractionControl: 0,
       airLevel: 0.7,
       landing: 0.4,
+      autoFans: 0,
     },
   },
   input: {
@@ -200,6 +222,12 @@ export const TUNING = {
       boostShake: 0.15, // trauma held while boosting
       shakeDecay: 2.5, // trauma lost per second
       shakeOffset: 0.3, // m of camera and aim offset at full trauma
+      // On a steep surface (a wall, the half-loop) the camera turns its up to the car's; on
+      // the floor, gentle ramps and in the air it uses world up.
+      surfaceAngleStart: 0.35, // rad of car tilt where the camera starts following its up…
+      surfaceAngleFull: 0.7, // …and follows it fully
+      upDamping: 4, // 1/s, how quickly the camera's up follows
+      upMaxRate: 3, // rad/s, the fastest it turns, so it never flips in one frame
     },
   },
   // Visual effects driven by the car's state (src/vfx, src/scene/Effects.tsx).
@@ -238,6 +266,7 @@ export const TUNING = {
       thruster: 0.5,
       wind: 0.25,
       skid: 0.3,
+      fan: 0.25,
       oneShots: 0.8, // hop, landing, boost burst, respawn
       race: 0.6, // countdown, rings, finish
       ui: 0.4,
@@ -253,6 +282,11 @@ export const TUNING = {
     wind: {
       fullSpeed: 40, // m/s where the wind reaches full level
       airborne: 1.6, // multiplier while in the air
+    },
+    // Fan whine: a band of noise rising with suction.
+    fan: {
+      idlePitch: 900, // Hz, band centre at the lightest suction
+      fullPitch: 2600, // Hz at full suction
     },
     skid: {
       minSkid: 0.25, // wheel skid (0–1) below which the tyres stay quiet

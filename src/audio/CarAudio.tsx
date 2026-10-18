@@ -27,12 +27,14 @@ type Voices = {
   windFilter: BiquadFilterNode
   wind: GainNode
   skid: GainNode
+  fanFilter: BiquadFilterNode
+  fan: GainNode
   stop: () => void
 }
 
 // The car's continuous sounds, all on the car bus (which fades out while paused):
 // motor and inverter whine following the speed, thruster roar following the flames, wind
-// growing with speed, and tyre squeal from sliding wheels.
+// growing with speed, tyre squeal from sliding wheels, and the fans' whine with suction.
 function createVoices(a: AudioGraph): Voices {
   const { ctx, car } = a
   const sources: AudioScheduledSourceNode[] = []
@@ -80,6 +82,11 @@ function createVoices(a: AudioGraph): Voices {
   noiseInto(filter('bandpass', 1100, 12, skid))
   noiseInto(filter('bandpass', 2300, 14, skid))
 
+  // Fans: a band of noise that rises in pitch with suction.
+  const fan = gainInto(a, car, 0)
+  const fanFilter = filter('bandpass', 900, 5, fan)
+  noiseInto(fanFilter)
+
   for (const s of sources) {
     if (s instanceof AudioBufferSourceNode) s.start(0, Math.random() * (a.noise.duration - 0.1))
     else s.start()
@@ -95,9 +102,11 @@ function createVoices(a: AudioGraph): Voices {
     windFilter,
     wind,
     skid,
+    fanFilter,
+    fan,
     stop: () => {
       for (const s of sources) s.stop()
-      for (const g of [motor, whine, thruster, wind, skid]) g.disconnect()
+      for (const g of [motor, whine, thruster, wind, skid, fan]) g.disconnect()
     },
   }
 }
@@ -149,7 +158,7 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
     if (!v || !a) return
     const now = a.ctx.currentTime
     const set = (param: AudioParam, value: number) => param.setTargetAtTime(value, now, FOLLOW)
-    const { mix, motor, wind, skid } = TUNING.audio
+    const { mix, motor, wind, skid, fan } = TUNING.audio
 
     // Motor: pitch with speed, louder and brighter under throttle.
     const speedFrac = MathUtils.clamp(Math.abs(t.speed) / motor.topSpeed, 0, 1)
@@ -179,6 +188,10 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
       v.skid.gain,
       mix.skid * MathUtils.clamp(MathUtils.inverseLerp(skid.minSkid, 1, slide), 0, 1),
     )
+
+    const { suction } = abilities.current
+    set(v.fan.gain, mix.fan * suction)
+    set(v.fanFilter.frequency, MathUtils.lerp(fan.idlePitch, fan.fullPitch, suction))
   })
 
   return null

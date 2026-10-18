@@ -34,7 +34,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 14   | Audio                          | 3 · Details | ☑      |
 | 15   | Handling & flight polish       | 3 · Details | ☑      |
 | 16.1 | Reveal: proving-ground greybox | 3 · Details | ☑      |
-| 16.2 | Reveal: suction & half-loop    | 3 · Details | ☐      |
+| 16.2 | Reveal: suction & half-loop    | 3 · Details | ☑      |
 | 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☐      |
 | 16.4 | Reveal: fleet jump             | 3 · Details | ☐      |
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☐      |
@@ -397,6 +397,46 @@ Moving a ring fixed the course: the line from the north-end ring to the fleet ri
 
 **Done when:** you can drive up the half-loop, stop upside down under the top section, and drive on off the lip.
 
+✅ **Done:** fans on F / pad LB (`fans` action), stepped in `src/car/abilities.ts` after `updateVehicle`. Decided at the start of the milestone: the fans only press the car into the surface, and **boost does the climbing** (the engine gives ~5.3 m/s², under 1 g).
+
+- **Suction:**
+  - Pull = `clamp(holdG − n.y, 0, maxG)`, with n the wheels' averaged contact normal: 0 on the floor, 1 g on a wall, 2 g on a ceiling (`TUNING.car.suction`).
+  - The pull is shared out over the wheels in contact, each pulling at its own contact point. Applied at the centre of mass, it turned a car rolling off the lip round its rear axle and up over the edge.
+  - It spools up and down, drains fuel with the suction, and stops the ground recharge.
+  - Beginner engages it on its own on surfaces steeper than 30° and lets go below 20° (`assists.*.autoFans`).
+- **Parking:** under the fans and below 3 m/s with no throttle, the idle brake rises to `holdBrake`. Once all four wheels are down, the car is also anchored where it stopped (static friction, `parkStiffness`). Without the anchor it crept ~0.1 m/s: Rapier's brake acts a step late, the springs on a curve push along it, and its 4 substeps add gravity at ⅝ of a step.
+- **In the car's frame:**
+  - `handling.ts`: slide angle and aero use the car's plane.
+  - `telemetry.ts`: landing impact is the speed into the surface landed on.
+  - The hop stays along the car's up, which already pushes off a wall or ceiling. Using the contact normal changed the Test Track hops, which the glide gaps are sized to.
+- **Bump stop:** the spring and its damping stiffen up to ×4 over the last 40% of travel, so the chassis no longer touches the loop at any speed (it rubbed from 25 m/s before). It fades in over 0.25–0.5 s after a touchdown, so kicker landings settle as before instead of bouncing.
+- **Chase cam:** a smoothed camera up follows the car's while it's grounded and tilted past 20–40°, and world up otherwise.
+  - It turns with damping, at most 3 rad/s, and rolls round the view direction when the turn is over ~150°, so it never flips.
+  - Heading, offsets, the ground clamp and the wall pull-in are all built on that up; with world up it's the same as before.
+- **HUD:** a Wall hold / Ceiling hold pill beside the status, a Fans meter while the fans are engaged, and the speed measured along the car's plane.
+- **Audio:** the fan whine is band-passed noise, 900 → 2600 Hz, its level following suction.
+- **Respawn:** unchanged. R works anywhere, and safe points still need level ground, though the clothoid's flat foot passes.
+
+Sim (`npm run sim:car`), both assist modes:
+
+- **No fans:** riding over the inverted top needs an arrival of 21.2 m/s (8.2 m/s at the top, √(g·r) = 9.8). Slower runs slide back or drop off and end on the pad. No chassis contact while riding, 12–45 m/s; the suspension no longer bottoms out up to 35 m/s (min 0.13 m vs 0.10 m before).
+- **Fans + boost:** climbs from 11.4 m/s, parks under the top for 3.5 s and drives off. That empties the tank: 0.38 fuel at the stop, about 0.42 for 3.5 s of full suction.
+- **From 20 / 25 m/s:** parks 3.6–3.9 s with 0 m creep and 0.35–0.49 fuel left, then drops off the lip and ends on the pad.
+- **Floor:** holding the fans leaves the rest height unchanged (0.827 m).
+- **Test Track:** every check passes. Hops, glide and the void ring match HEAD; kicker landings move 1–2.5 m on 30–90 m jumps (the bump stop on the kicker face).
+
+Headless Chrome, 17 checks:
+
+- F and a scripted pad LB engage the fans on the floor (suction 0, meter shown);
+- Beginner auto-fans climb, park 4.4 s with 0.00 m drift, drop off the lip and land;
+- the HUD showed the Fans meter, Wall hold and Ceiling hold;
+- camera up follows to −0.75 under the top, is back to world up 2.5 s after landing, turns at most 3° per frame, and the ramp never comes between car and camera (0 of ~1,540 frames);
+- the fan voice reached gain 0.23 and 2.45 kHz;
+- R under the top and on the wall returns the car upright to the run-up;
+- Pro without F gets no fans on the wall, and Pro holding F parks under the top;
+- no page errors, 60 fps, 72 draw calls at the Proving Ground spawn as in M16.1;
+- the Test Track 3 s drive gives 15.71 m/s vs 15.73 on HEAD.
+
 ### M16.3 — Reveal: jets, air roll & drop
 
 - **Cold-gas jets:** a held `lift` action pushes along the car's own up vector, up to `TUNING.car.jets.liftG` (~2.7 g, so the car can lift off flat ground), plus a smaller forward push. It drains fuel (one shared bar for now). Because the thrust is body-relative, firing while inverted pushes you down, so you roll first, then brake the fall.
@@ -513,6 +553,11 @@ Park later ideas here instead of building them early.
   - a separate compressed-air tank for the jets instead of sharing the fuel bar;
   - a debug overlay of force arrows (suction, lift, grip) like the pplx reconstruction;
   - parked cars you can knock over.
-- Half-loop (M16.1 sim, no fans): from ~30 m/s the car rides the curve with the suspension fully compressed (0.10 m) from about 20° up, so its chassis scrapes; M16.2's "suspension handles the curvature" check should start here (stiffer springs under load, more travel, or a gentler radius). Without `FIX_INTERNAL_EDGES` on the trimesh it stops dead; keep the flag on any future trimesh pieces.
-- The chase cam on the Proving Ground still uses world up: on the loop's vertical section it sits behind and below the car, looking up at it (M16.2 follows the car's up vector on surfaces).
+- Half-loop trimesh: without `FIX_INTERNAL_EDGES` a scraping chassis stops dead; keep the flag on any future trimesh pieces. M16.2's bump stop keeps the chassis off the loop at every speed, but at 45 m/s the springs still reach the end of their travel.
+- Half-loop (M16.2):
+  - A car dropping off the lip nose-first is turned upright by the M3/M15 air auto-level before it lands, often on its wheels; M16.3 replaces that with the roll.
+  - Parked under the top, the camera looks up the ceiling towards the lip and mostly sees sky; a lower look target on ceilings could show more of the drop.
+  - Climbing from a crawl needs boost the whole way and empties the tank by the end of a 3 s hold; M16.5 scoring should allow for that (or the separate air tank from the reveal ideas).
+- A safe point can be recorded on the first metres of the loop's clothoid entry (it's level within `flatTolerance`), so R after a loop attempt can put the car at the ramp's foot facing it. Harmless so far; tighten the probe if it bites.
+- The bump stop also acts on the Test Track kickers' faces: launches moved 1–2.5 m. Every ring and gap check still passes.
 - Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's south straight, east of spawn.

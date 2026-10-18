@@ -10,6 +10,7 @@ export type CarControls = {
   hop: boolean // held: glide
   hopPressed: boolean // pressed since the last step: hop
   handbrake: boolean
+  fans: boolean
   reset: boolean // pressed since the last step
 }
 
@@ -21,6 +22,7 @@ export const released = (): CarControls => ({
   hop: false,
   hopPressed: false,
   handbrake: false,
+  fans: false,
   reset: false,
 })
 
@@ -51,6 +53,7 @@ export function useCarControls() {
       hop: held('hop'),
       hopPressed: hop,
       handbrake: held('handbrake'),
+      fans: held('fans'),
       reset,
     }
   }, [])

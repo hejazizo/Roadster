@@ -7,7 +7,7 @@ import {
   type RapierRigidBody,
 } from '@react-three/rapier'
 import { Suspense, useEffect, useRef, type RefObject } from 'react'
-import { MathUtils, type Group, type MeshStandardMaterial } from 'three'
+import { MathUtils, Quaternion, Vector3, type Group, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
 import { rumble } from '../input/input'
 import { currentAssist } from '../state/assistStore'
@@ -40,6 +40,10 @@ const HELD = { ...released(), handbrake: true }
 // After the finish the car rolls to a stop on the idle brake behind the results screen
 // (a rear handbrake at boost speed could spin it).
 const COASTING = released()
+
+const quat = new Quaternion()
+const up = new Vector3()
+const vel = new Vector3()
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
@@ -120,7 +124,8 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
     }
 
     const assist = currentAssist()
-    stepDriving(driving.current, body, vc, c, world.timestep, assist)
+    const holding = abilities.current.suction > 0
+    stepDriving(driving.current, body, vc, c, world.timestep, assist, holding)
     // Wheel rays and ground probes ignore sensors, so the car can't ride on a ring.
     const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     vc.updateVehicle(world.timestep, solidOnly)
@@ -132,7 +137,7 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
 
   // Visual wheels follow the controller's suspension, steering and spin.
   useFrame((_, dt) => {
-    const { fuel, grounded, boosting, gliding } = abilities.current
+    const { fuel, grounded, boosting, gliding, fans, suction, hold } = abilities.current
     const t = telemetry.current
     if (!useRaceStore.getState().paused) {
       const { glideLevel, attack, release } = TUNING.vfx.flame
@@ -155,15 +160,27 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
     fb.boosting = boosting
     fb.landings = t.landings
 
-    // Mirror the car's state for the HUD once per rendered frame.
-    const v = ref.current?.linvel()
+    // Mirror the car's state for the HUD once per rendered frame. Speed is along the car's
+    // plane, so it reads the same on a wall as on the floor.
+    const body = ref.current
+    let speed = 0
+    if (body) {
+      const r = body.rotation()
+      const v = body.linvel()
+      up.set(0, 1, 0).applyQuaternion(quat.set(r.x, r.y, r.z, r.w))
+      vel.set(v.x, v.y, v.z)
+      speed = vel.addScaledVector(up, -vel.dot(up)).length()
+    }
     useCarStore.setState({
-      speed: v ? Math.hypot(v.x, v.z) : 0,
+      speed,
       fuel,
       grounded,
       boosting,
       gliding,
       drifting: driving.current.drifting,
+      fans,
+      suction,
+      hold,
     })
     const vc = vehicle.current
     if (!vc) return

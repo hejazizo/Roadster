@@ -52,6 +52,7 @@ const CONTROLS: [BindingRef[], string][] = [
   [['boost'], 'Boost'],
   [['hop'], 'Hop, hold to glide'],
   [['handbrake'], 'Handbrake'],
+  [['fans'], 'Fans: stick to walls'],
   [['reset'], 'Back to safe point'],
   [['restart'], 'Restart'],
   [['pause'], 'Pause'],

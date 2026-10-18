@@ -4,7 +4,7 @@ import { TUNING } from '../config/tuning'
 import type { VehicleController } from './abilities'
 import type { CarControls } from './useCarControls'
 
-const { wheels, suspension, tires, drift, engine, aero, weightTransfer, brake, steering } =
+const { wheels, suspension, tires, drift, engine, aero, weightTransfer, brake, steering, suction } =
   TUNING.car
 
 export type Assist = (typeof TUNING.assists)['beginner']
@@ -26,6 +26,7 @@ export type DrivingState = {
   rearSlip: number // rad, signed slip angle at the rear tyres (towards the car's left positive)
   velocity: Vector3 // m/s on the last step
   accel: Vector3 // m/s², car-local (x towards the left, z forward), smoothed
+  groundTime: number // s on the ground since the last touchdown
 }
 
 export const createDrivingState = (): DrivingState => ({
@@ -36,6 +37,7 @@ export const createDrivingState = (): DrivingState => ({
   rearSlip: 0,
   velocity: new Vector3(),
   accel: new Vector3(),
+  groundTime: 0,
 })
 
 export function resetDriving(state: DrivingState) {
@@ -64,11 +66,13 @@ const axle = new Vector3()
 const pointVel = new Vector3()
 const local = new Vector3()
 const vec = new Vector3()
+const along = new Vector3()
 const slips = wheels.positions.map(() => 0)
 
 // Engine, brakes, steering and tyre grip for one physics step, plus the drift state, assists
 // and weight transfer. Call before `updateVehicle`; slip is measured at the contacts it found
-// on the previous step.
+// on the previous step. `holding`: the fans held the car on the last step, so once slow it
+// parks on the brakes wherever it stops.
 export function stepDriving(
   state: DrivingState,
   body: RapierRigidBody,
@@ -76,6 +80,7 @@ export function stepDriving(
   c: CarControls,
   dt: number,
   assist: Assist,
+  holding: boolean,
 ) {
   const mass = body.mass()
   const r = body.rotation()
@@ -103,15 +108,20 @@ export function stepDriving(
     axle.set(Math.cos(s), 0, -Math.sin(s)).applyQuaternion(quat)
     const v = body.velocityAtPoint(point)
     pointVel.set(v.x, v.y, v.z)
-    const along = pointVel.dot(heading)
+    const rolling = pointVel.dot(heading)
     const across = pointVel.dot(axle)
-    if (Math.hypot(along, across) > MIN_SLIP_SPEED) slips[i] = Math.atan2(across, Math.abs(along))
+    if (Math.hypot(rolling, across) > MIN_SLIP_SPEED) {
+      slips[i] = Math.atan2(across, Math.abs(rolling))
+    }
     if (!isFront(i)) {
       rearSlip += slips[i]
       rearCount++
     }
   }
   state.rearSlip = rearCount ? rearSlip / rearCount : 0
+  state.groundTime = grounded ? state.groundTime + dt : 0
+  const { bumpDelay } = suspension
+  const bump = MathUtils.smoothstep(state.groundTime, bumpDelay, 2 * bumpDelay)
   const rearAngle = Math.abs(state.rearSlip)
 
   // Drift: starts on the handbrake or when the rear steps out under throttle, ends once the
@@ -176,6 +186,7 @@ export function stepDriving(
   const t = c.throttle
   let engineForce = 0
   let brakeForce = 0
+  const parked = holding && t === 0 && Math.abs(speed) < suction.holdSpeed
   if (t > 0) {
     if (speed < -stopSpeed) brakeForce = brake.force * t
     else engineForce = engine.force * t * fade(speed, engine.maxSpeed)
@@ -183,7 +194,7 @@ export function stepDriving(
     if (speed > stopSpeed) brakeForce = brake.force * -t
     else engineForce = engine.reverseForce * t * fade(-speed, engine.maxReverseSpeed)
   } else {
-    brakeForce = brake.idleBrake
+    brakeForce = parked ? Math.max(brake.idleBrake, suction.holdBrake) : brake.idleBrake
   }
   if (!state.drifting && !c.handbrake) {
     const sliding = MathUtils.smoothstep(rearAngle, tires.peakSlipAngle, tires.slideSlipAngle)
@@ -193,7 +204,7 @@ export function stepDriving(
   for (let i = 0; i < slips.length; i++) {
     const front = isFront(i)
     const grip = gripCurve(slips[i]) * (front ? 1 : tires.rearGrip * state.rearGrip)
-    applyWheelTuning(vc, i, tires.frictionSlip * grip)
+    applyWheelTuning(vc, i, tires.frictionSlip * grip, bump)
     vc.setWheelSteering(i, front ? state.steer : 0)
     vc.setWheelEngineForce(i, front ? 0 : engineForce)
     vc.setWheelBrake(i, !front && c.handbrake ? brake.handbrakeForce : brakeForce)
@@ -218,7 +229,7 @@ export function stepDriving(
 
   // Drift hold: past the assist's drift angle, spin that would widen the slide (spin in the
   // same direction as the slide) is damped, harder the further past it is.
-  const slide = slideAngle(body)
+  const slide = slideAngle(body, quat)
   const past = Math.abs(slide) - assist.driftAngle
   if (state.drifting && past > 0 && yawRate * slide > 0) {
     damp(yawRate * dampFactor(assist.driftHold * past, dt))
@@ -253,25 +264,26 @@ export function stepDriving(
     body.applyImpulse(vec.copy(forward).multiplyScalar(push), true)
   }
 
-  // Aero: drag against the horizontal motion and downforce along the car's down axis.
+  // Aero: drag against the motion along the surface and downforce along the car's down
+  // axis, so they work the same on a wall or ceiling.
   const v = body.linvel()
-  const flatSpeed = Math.hypot(v.x, v.z)
-  if (flatSpeed > 0) {
-    const d = aero.drag * flatSpeed * mass * dt
-    const down = aero.downforce * flatSpeed * flatSpeed * mass * dt
-    body.applyImpulse(
-      { x: -v.x * d - up.x * down, y: -up.y * down, z: -v.z * d - up.z * down },
-      true,
-    )
+  vec.set(v.x, v.y, v.z)
+  along.copy(vec).addScaledVector(up, -vec.dot(up))
+  const surfaceSpeed = along.length()
+  if (surfaceSpeed > 0) {
+    const d = aero.drag * surfaceSpeed * mass * dt
+    const down = aero.downforce * surfaceSpeed * surfaceSpeed * mass * dt
+    body.applyImpulse(along.multiplyScalar(-d).addScaledVector(up, -down), true)
   }
 }
 
-// The car's slide: the signed angle from its travel direction to its heading on the ground
-// plane (positive when the nose has swung left of the travel direction).
-function slideAngle(body: RapierRigidBody) {
+// The car's slide: the signed angle from its travel direction to its heading, in the car's
+// own plane (positive when the nose has swung left of the travel direction).
+function slideAngle(body: RapierRigidBody, rotation: Quaternion) {
   const v = body.linvel()
-  if (Math.hypot(v.x, v.z) < MIN_SLIP_SPEED) return 0
-  return Math.atan2(forward.x * v.z - forward.z * v.x, forward.x * v.x + forward.z * v.z)
+  local.set(v.x, v.y, v.z).applyQuaternion(quatInv.copy(rotation).invert())
+  if (Math.hypot(local.x, local.z) < MIN_SLIP_SPEED) return 0
+  return -Math.atan2(local.x, local.z)
 }
 
 // Engine force left at a speed: full at rest, fading to none at top speed.
@@ -281,12 +293,20 @@ function fade(speed: number, top: number) {
 }
 
 // Applied every step so suspension and tire changes from the tuning panel take effect live.
-function applyWheelTuning(vc: VehicleController, i: number, frictionSlip: number) {
-  vc.setWheelSuspensionRestLength(i, suspension.restLength)
-  vc.setWheelMaxSuspensionTravel(i, suspension.maxTravel)
-  vc.setWheelSuspensionStiffness(i, suspension.stiffness)
-  vc.setWheelSuspensionCompression(i, suspension.compression)
-  vc.setWheelSuspensionRelaxation(i, suspension.relaxation)
+// The bump stop: the spring stiffens over the last part of its travel (measured on the
+// previous step), with its damping, so a hard load like the half-loop taken fast doesn't
+// bottom out. It fades in over the moments after a touchdown (`bump` 0–1), so a landing
+// isn't bounced back off it.
+function applyWheelTuning(vc: VehicleController, i: number, frictionSlip: number, bump: number) {
+  const { restLength, maxTravel, stiffness, bumpStart, bumpStiffness } = suspension
+  const length = vc.wheelSuspensionLength(i) ?? restLength
+  const compression = (restLength - length) / maxTravel
+  const stiffen = 1 + (bumpStiffness - 1) * bump * MathUtils.smoothstep(compression, bumpStart, 1)
+  vc.setWheelSuspensionRestLength(i, restLength)
+  vc.setWheelMaxSuspensionTravel(i, maxTravel)
+  vc.setWheelSuspensionStiffness(i, stiffness * stiffen)
+  vc.setWheelSuspensionCompression(i, suspension.compression * stiffen)
+  vc.setWheelSuspensionRelaxation(i, suspension.relaxation * stiffen)
   vc.setWheelMaxSuspensionForce(i, suspension.maxForce)
   vc.setWheelFrictionSlip(i, frictionSlip)
   vc.setWheelSideFrictionStiffness(i, tires.sideFrictionStiffness)

@@ -7,6 +7,7 @@ export type ButtonAction =
   | 'boost'
   | 'hop'
   | 'handbrake'
+  | 'fans' // held: underbody suction
   | 'reset'
   | 'pause'
   | 'restart' // during a run
@@ -40,6 +41,7 @@ const A = 0
 const B = 1
 const X = 2
 const Y = 3
+const LB = 4
 const RB = 5
 const LT = 6
 const RT = 7
@@ -76,6 +78,7 @@ export const BINDINGS: {
     boost: { keys: ['ShiftLeft', 'ShiftRight'], pad: [B] },
     hop: { keys: ['Space'], pad: [A] },
     handbrake: { keys: ['KeyE'], pad: [X] },
+    fans: { keys: ['KeyF'], pad: [LB] },
     reset: { keys: ['KeyR'], pad: [Y] },
     pause: { keys: ['Escape'], pad: [MENU] },
     restart: { keys: ['Enter'], pad: [VIEW] },

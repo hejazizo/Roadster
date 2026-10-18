@@ -8,23 +8,27 @@ import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
 import { useRaceStore } from '../state/raceStore'
 
-// Below this horizontal length the car points too far up/down to give a heading.
+// Below this length, the car's forward across the camera's up is too short to give a heading.
 const MIN_FLAT_FORWARD = 0.2
+// Turning the camera's up further than this (rad) takes it round the view direction (a roll),
+// not over the top, so leaving a ceiling never swings the camera through the car.
+const ROLL_ANGLE = 2.6
 // How far down (m) to look for the surface below the camera.
 const GROUND_PROBE = 100
 // m short of a clear view at which the eased wall release lets go.
 const REACH_SLACK = 0.05
 
+const WORLD_UP = new Vector3(0, 1, 0)
 const carPos = new Vector3()
 const carQuat = new Quaternion()
 const forward = new Vector3()
+const carUp = new Vector3()
+const targetUp = new Vector3()
+const axis = new Vector3()
 const desiredPos = new Vector3()
 const desiredLook = new Vector3()
 const toCamera = new Vector3()
 const shakeLook = new Vector3()
-
-// Shortest signed angle from a to b, in [-π, π].
-const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
 
 // Frame-rate independent lerp factor for a damping rate.
 const dampFactor = (lambda: number, dt: number) => 1 - Math.exp(-lambda * dt)
@@ -41,13 +45,16 @@ type ChaseCamProps = {
 }
 
 // Third-person camera behind and above the car. Follows the car's heading (not its
-// velocity), so reversing keeps the camera behind the nose. Widens its view while
-// boosting and shakes on landings.
+// velocity), so reversing keeps the camera behind the nose. "Above" is world up, except
+// while the car drives on a steep surface (a wall, the half-loop), where the camera's up
+// turns smoothly to the car's. Widens its view while boosting and shakes on landings.
 export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
   const { world, rapier } = useRapier()
   const get = useThree((s) => s.get)
   const ray = useRef<Ray | null>(null)
-  const heading = useRef(0)
+  // Unit vectors: the camera's up, and the heading it looks along (across that up).
+  const camUp = useRef(new Vector3(0, 1, 0))
+  const heading = useRef(new Vector3(0, 0, 1))
   const lookAt = useRef(new Vector3())
   const lastCarPos = useRef(new Vector3())
   const started = useRef(false)
@@ -58,10 +65,11 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
   const reach = useRef(Infinity)
   const shake = useRef({ trauma: 0, time: 0, landings: telemetry.current.landings })
 
-  // Leave the debug orbit cam with the normal field of view.
+  // Leave the debug orbit cam with world up and the normal field of view.
   useEffect(
     () => () => {
       const { camera } = get()
+      camera.up.set(0, 1, 0)
       if (!(camera instanceof PerspectiveCamera)) return
       camera.fov = TUNING.camera.chase.fov
       camera.updateProjectionMatrix()
@@ -92,6 +100,10 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
       boostShake,
       shakeDecay,
       shakeOffset,
+      surfaceAngleStart,
+      surfaceAngleFull,
+      upDamping,
+      upMaxRate,
     } = TUNING.camera.chase
     const car = target.current
     if (!car) return
@@ -102,28 +114,54 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     const teleported = started.current && lastCarPos.current.distanceTo(carPos) > snapDistance
     lastCarPos.current.copy(carPos)
 
-    forward.set(0, 0, 1).applyQuaternion(carQuat).setY(0)
-    if (forward.length() > MIN_FLAT_FORWARD) {
-      const yaw = Math.atan2(forward.x, forward.z)
-      heading.current =
-        started.current && !teleported
-          ? MathUtils.damp(
-              heading.current,
-              heading.current + angleDelta(heading.current, yaw),
-              headingDamping,
-              dt,
-            )
-          : yaw
+    const snap = !started.current || teleported
+    const up = camUp.current
+    const h = heading.current
+
+    // The up to follow: the car's while it's on a steep surface, world up otherwise (on the
+    // floor, gentle ramps and in the air), blended in between.
+    carUp.set(0, 1, 0).applyQuaternion(carQuat)
+    const tilt = carUp.angleTo(WORLD_UP)
+    const follow = telemetry.current.grounded
+      ? MathUtils.smoothstep(tilt, surfaceAngleStart, surfaceAngleFull)
+      : 0
+    targetUp.copy(WORLD_UP)
+    if (follow > 0 && tilt > 1e-4) {
+      axis.crossVectors(WORLD_UP, carUp)
+      // Upside down there's no single way round; go the way the car pitched over.
+      if (axis.lengthSq() < 1e-8) axis.set(1, 0, 0).applyQuaternion(carQuat)
+      targetUp.applyAxisAngle(axis.normalize(), tilt * follow)
     }
-    const hx = Math.sin(heading.current)
-    const hz = Math.cos(heading.current)
+    // Turn towards it, damped and never faster than upMaxRate.
+    const upAngle = up.angleTo(targetUp)
+    if (upAngle > 1e-5) {
+      const turn = snap ? upAngle : Math.min(upAngle * dampFactor(upDamping, dt), upMaxRate * dt)
+      axis.crossVectors(up, targetUp)
+      if (upAngle > ROLL_ANGLE || axis.lengthSq() < 1e-8) axis.copy(h)
+      up.applyAxisAngle(axis.normalize(), turn).normalize()
+    }
+
+    // Heading: the car's forward laid across the camera's up, followed with damping.
+    forward.set(0, 0, 1).applyQuaternion(carQuat)
+    forward.addScaledVector(up, -forward.dot(up))
+    h.addScaledVector(up, -h.dot(up))
+    if (h.lengthSq() < 1e-8) h.copy(forward)
+    h.normalize()
+    if (forward.length() > MIN_FLAT_FORWARD) {
+      forward.normalize()
+      if (snap) h.copy(forward)
+      else {
+        const angle = Math.atan2(axis.crossVectors(h, forward).dot(up), h.dot(forward))
+        h.applyAxisAngle(up, angle * dampFactor(headingDamping, dt)).normalize()
+      }
+    }
 
     const v = body.current?.linvel()
     const speed = v ? Math.hypot(v.x, v.y, v.z) : 0
     const dist = distance + Math.min(speed * speedDistance, maxExtraDistance)
 
-    desiredPos.set(carPos.x - hx * dist, carPos.y + height, carPos.z - hz * dist)
-    desiredLook.set(carPos.x + hx * lookAhead, carPos.y + lookHeight, carPos.z + hz * lookAhead)
+    desiredPos.copy(carPos).addScaledVector(h, -dist).addScaledVector(up, height)
+    desiredLook.copy(carPos).addScaledVector(h, lookAhead).addScaledVector(up, lookHeight)
 
     // On mount the camera glides in from wherever it was; a teleport snaps it.
     if (teleported) camera.position.copy(desiredPos)
@@ -137,19 +175,23 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     const carBody = body.current ?? undefined
     const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
 
-    // Stay above the surface below the camera, cast from above the car's height so
-    // overhangs above the camera don't count.
-    const top = carPos.y + height + 1
-    r.origin = { x: camera.position.x, y: top, z: camera.position.z }
-    r.dir = { x: 0, y: -1, z: 0 }
+    // Stay above the surface below the camera (along its up), cast from above the car's
+    // height so overhangs above the camera don't count.
+    const camHeight = toCamera.copy(camera.position).sub(carPos).dot(up)
+    const top = height + 1
+    const origin = toCamera.copy(camera.position).addScaledVector(up, top - camHeight)
+    r.origin = { x: origin.x, y: origin.y, z: origin.z }
+    r.dir = { x: -up.x, y: -up.y, z: -up.z }
     const ground = world.castRay(r, GROUND_PROBE, true, solidOnly, undefined, undefined, carBody)
     if (ground) {
-      camera.position.y = Math.max(camera.position.y, top - ground.timeOfImpact + minHeight)
+      const lift = top - ground.timeOfImpact + minHeight - camHeight
+      if (lift > 0) camera.position.addScaledVector(up, lift)
     }
 
     // Pull in in front of anything between the car and the camera. Not damped, so the
     // camera never shows the inside of a wall; moving back out is.
-    r.origin = { x: carPos.x, y: carPos.y + lookHeight, z: carPos.z }
+    toCamera.copy(carPos).addScaledVector(up, lookHeight)
+    r.origin = { x: toCamera.x, y: toCamera.y, z: toCamera.z }
     toCamera.copy(camera.position).sub(r.origin)
     const camDist = toCamera.length()
     if (camDist > 0) {
@@ -187,6 +229,7 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     camera.position.y += noise(s.time, 1) * amount
     camera.position.z += noise(s.time, 2) * amount
     shakeLook.set(noise(s.time, 3), noise(s.time, 4), noise(s.time, 5))
+    camera.up.copy(up)
     camera.lookAt(shakeLook.multiplyScalar(amount * 0.5).add(lookAt.current))
 
     if (camera instanceof PerspectiveCamera && !paused) {

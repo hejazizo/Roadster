@@ -20,7 +20,7 @@ export type CarTelemetry = {
   throttle: number // -1…1, the throttle the car was given this step
   grounded: boolean
   airTime: number // s since the wheels left the ground
-  fallSpeed: number // m/s downwards on the last airborne step
+  fallSpeed: number // m/s towards the surface landed on, at the last landing (else downwards)
   landings: number // bumped on every landing, so readers can spot a new one
   landingImpact: number // 0–1 strength of the last landing
   braking: boolean
@@ -64,6 +64,8 @@ const quat = new Quaternion()
 const forward = new Vector3()
 const axle = new Vector3()
 const pointVel = new Vector3()
+const normal = new Vector3()
+const lastVel = new Vector3() // on the last airborne step
 
 // Call after `updateVehicle`, which refreshes the wheel contacts.
 export function stepTelemetry(
@@ -78,17 +80,19 @@ export function stepTelemetry(
   quat.set(r.x, r.y, r.z, r.w)
 
   let grounded = false
+  normal.set(0, 0, 0)
   t.wheels.forEach((w, i) => {
     const point = vc.wheelContactPoint(i)
-    const normal = vc.wheelContactNormal(i)
-    w.contact = vc.wheelIsInContact(i) && !!point && !!normal
-    if (!w.contact || !point || !normal) {
+    const n = vc.wheelContactNormal(i)
+    w.contact = vc.wheelIsInContact(i) && !!point && !!n
+    if (!w.contact || !point || !n) {
       w.skid = 0
       return
     }
     grounded = true
     w.point.set(point.x, point.y, point.z)
-    w.normal.set(normal.x, normal.y, normal.z)
+    w.normal.set(n.x, n.y, n.z)
+    normal.add(w.normal)
 
     // Car-local +X is left and positive steering turns left.
     const steer = vc.wheelSteering(i) ?? 0
@@ -111,8 +115,15 @@ export function stepTelemetry(
 
   if (!grounded) {
     t.airTime += dt
-    t.fallSpeed = Math.max(0, -body.linvel().y)
+    const v = body.linvel()
+    lastVel.set(v.x, v.y, v.z)
+    t.fallSpeed = Math.max(0, -v.y)
   } else {
+    // A landing's impact is the speed into the surface it lands on (a wall, a ramp or the
+    // floor), from the last step in the air.
+    if (!t.grounded && t.airTime > 0) {
+      t.fallSpeed = Math.max(0, -lastVel.dot(normal.normalize()))
+    }
     if (!t.grounded && t.airTime > landing.minAirTime && t.fallSpeed > landing.minImpactSpeed) {
       t.landings++
       t.landingImpact = Math.min(t.fallSpeed / landing.fullImpactSpeed, 1)

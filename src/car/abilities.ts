@@ -5,7 +5,7 @@ import type { Assist } from './handling'
 import type { PhysicsWorld, QueryFlags, Ray } from './respawn'
 import type { CarControls } from './useCarControls'
 
-const { fuel, boost, hop, glide, airControl, landing } = TUNING.car
+const { fuel, boost, hop, glide, airControl, landing, suction } = TUNING.car
 
 export type VehicleController = ReturnType<
   ReturnType<typeof useRapier>['world']['createVehicleController']
@@ -13,6 +13,9 @@ export type VehicleController = ReturnType<
 
 // What the ground probe below the car casts against: solid level geometry, not the car.
 export type GroundProbe = { world: PhysicsWorld; ray: Ray; flags: QueryFlags }
+
+// Which way the surface under the wheels faces: a wall or a ceiling the car is driving on.
+export type Hold = 'none' | 'wall' | 'ceiling'
 
 export type AbilityState = {
   fuel: number
@@ -24,6 +27,11 @@ export type AbilityState = {
   hopBuffer: number // s a hop press is still waiting for the ground
   sinceHop: number // s since the last hop
   landingAssist: number // s of landing assist left
+  fans: boolean // the fans are engaged (held, or automatic on a steep surface)
+  suction: number // 0–1 of suction.maxG, spooled
+  surfaceNormal: Vector3 // averaged wheel contact normal, valid while grounded
+  hold: Hold
+  parkedAt: Vector3 | null // where the fans parked the car on a wall or ceiling
 }
 
 export const createAbilityState = (): AbilityState => ({
@@ -36,6 +44,11 @@ export const createAbilityState = (): AbilityState => ({
   hopBuffer: 0,
   sinceHop: Infinity,
   landingAssist: 0,
+  fans: false,
+  suction: 0,
+  surfaceNormal: new Vector3(0, 1, 0),
+  hold: 'none',
+  parkedAt: null,
 })
 
 // Frame-rate independent lerp factor for a damping rate.
@@ -54,11 +67,18 @@ const impulse = new Vector3()
 const level = new Vector3()
 const groundUp = new Vector3()
 const WORLD_UP = new Vector3(0, 1, 0)
+// A surface whose normal points less up than this (cos 60°) is a wall; below its negative,
+// a ceiling.
+const WALL_NORMAL_Y = 0.5
 
 // Refill and drop any glide, e.g. on reset. The hop count carries on, so a reset doesn't
 // look like a hop to its readers.
 export function resetAbilities(state: AbilityState, body: RapierRigidBody) {
-  Object.assign(state, { ...createAbilityState(), hops: state.hops })
+  Object.assign(state, {
+    ...createAbilityState(),
+    hops: state.hops,
+    surfaceNormal: state.surfaceNormal.set(0, 1, 0),
+  })
   body.setGravityScale(1, true)
 }
 
@@ -88,13 +108,15 @@ export function stepAbilities(
   state.airTime = grounded ? 0 : state.airTime + dt
   state.sinceHop += dt
   state.landingAssist = Math.max(0, state.landingAssist - dt)
+  stepSuction(state, body, vc, c, dt, assist)
 
   // A press is kept for a moment until the car can hop (buffer), and the car can still hop
   // just after driving off an edge (coyote time).
   state.hopBuffer = c.hopPressed ? hop.buffer : Math.max(0, state.hopBuffer - dt)
   const canHop = state.sinceHop > hop.cooldown && state.airTime <= hop.coyoteTime
   if (state.hopBuffer > 0 && canHop) {
-    // Cancel any fall first (coyote hop), so every hop is the same height.
+    // Along the car's up, so it pushes off a wall or ceiling too. Cancel any fall first
+    // (coyote hop), so every hop is the same height.
     const v = body.linvel()
     const falling = Math.min(0, v.x * up.x + v.y * up.y + v.z * up.z)
     impulse.copy(up).multiplyScalar((hop.velocity - falling) * mass)
@@ -138,8 +160,97 @@ export function stepAbilities(
   if (!grounded) steerInAir(body, c, dt, gliding ? 1 : airControl.plainFactor, assist, probe)
   else if (state.landingAssist > 0) settleLanding(body, dt, assist)
 
-  if (grounded && !state.boosting) state.fuel += fuel.rechargePerSecond * dt
+  if (grounded && !state.boosting && state.suction === 0) {
+    state.fuel += fuel.rechargePerSecond * dt
+  }
   state.fuel = MathUtils.clamp(state.fuel, 0, fuel.max)
+}
+
+// Fans: while engaged and any wheel touches, pull the car into the surface, as much as keeps
+// `holdG` of load on it (gravity already gives that on the floor), up to `maxG`. The pull is
+// shared out over the wheels, each pulling its quarter at its own contact, so the part of the
+// car past an edge isn't held (a car rolling off the lip doesn't pivot round it). Drains
+// fuel with the suction.
+function stepSuction(
+  state: AbilityState,
+  body: RapierRigidBody,
+  vc: VehicleController,
+  c: CarControls,
+  dt: number,
+  assist: Assist,
+) {
+  const n = state.surfaceNormal
+  let contacts = 0
+  n.set(0, 0, 0)
+  for (let i = 0; i < vc.numWheels(); i++) {
+    const normal = vc.wheelContactNormal(i)
+    if (!vc.wheelIsInContact(i) || !normal) continue
+    n.x += normal.x
+    n.y += normal.y
+    n.z += normal.z
+    contacts++
+  }
+  if (contacts > 0 && n.lengthSq() > 0) n.normalize()
+  else n.set(0, 1, 0)
+
+  const grounded = contacts > 0
+  // Assist: steep surfaces engage the fans on their own, and keep them on until it flattens.
+  const tilt = Math.acos(MathUtils.clamp(n.y, -1, 1))
+  const auto =
+    assist.autoFans > 0 &&
+    grounded &&
+    tilt > (state.fans ? Math.min(suction.autoRelease, suction.autoAngle) : suction.autoAngle)
+  state.fans = grounded && (c.fans || auto)
+  state.hold = !grounded
+    ? 'none'
+    : n.y <= -WALL_NORMAL_Y
+      ? 'ceiling'
+      : n.y < WALL_NORMAL_Y
+        ? 'wall'
+        : 'none'
+
+  const demand = MathUtils.clamp(suction.holdG - n.y, 0, suction.maxG) / suction.maxG
+  const target = state.fans && state.fuel > 0 ? demand : 0
+  state.suction = MathUtils.damp(state.suction, target, suction.spoolRate, dt)
+  if (state.suction < 1e-3 && target === 0) state.suction = 0
+  if (!grounded || state.suction === 0) return
+
+  const g = -TUNING.world.gravity[1]
+  const perWheel = (state.suction * suction.maxG * g * body.mass() * dt) / vc.numWheels()
+  for (let i = 0; i < vc.numWheels(); i++) {
+    const normal = vc.wheelContactNormal(i)
+    const point = vc.wheelContactPoint(i)
+    if (!vc.wheelIsInContact(i) || !normal || !point) continue
+    impulse.set(normal.x, normal.y, normal.z).multiplyScalar(-perWheel)
+    body.applyImpulseAtPoint(impulse, point, true)
+  }
+  state.fuel -= suction.fuelPerSecond * state.suction * dt
+
+  // Parked on a wall or ceiling (slow, no throttle, all wheels down): the tyres hold in
+  // static friction. The brakes act a step late and the springs on a curve push along the
+  // surface, so on their own the car creeps. Instead, after the vehicle has applied its
+  // forces, set the motion along the surface to cancel the coming step's gravity and pull
+  // back to where the car stopped.
+  const p = body.translation()
+  const parked =
+    contacts === vc.numWheels() &&
+    c.throttle === 0 &&
+    Math.abs(vc.currentVehicleSpeed()) < suction.holdSpeed
+  if (!parked) {
+    state.parkedAt = null
+    return
+  }
+  state.parkedAt ??= new Vector3(p.x, p.y, p.z)
+  const v = body.linvel()
+  const [gx, gy, gz] = TUNING.world.gravity
+  // The velocity wanted along the surface, less the one the coming step would give.
+  impulse
+    .set(p.x, p.y, p.z)
+    .sub(state.parkedAt)
+    .multiplyScalar(-suction.parkStiffness)
+    .sub(vel.set(v.x + gx * dt, v.y + gy * dt, v.z + gz * dt))
+  impulse.addScaledVector(n, -impulse.dot(n)).multiplyScalar(body.mass())
+  body.applyImpulse(impulse, true)
 }
 
 // The "up" the car levels to in the air: world up, blending to the normal of the ground

@@ -15,7 +15,7 @@ Docker (only Docker needed on the host):
 - `make lint` / `make build` / `make format` — run the npm scripts in a container
 - `make shell` — bash inside the container; `make clean` — remove image and volumes
 - `make car-model` — rebuild `public/models/car.glb` from the source model (see `docs/car-model-spec.md`)
-- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps and ring reachability for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
+- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability and the half-loop (with and without fans) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
 
 The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
 
