@@ -5,6 +5,7 @@ import { MathUtils } from 'three'
 import type { AbilityState } from '../car/abilities'
 import type { CarTelemetry } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
+import type { JetLevels } from '../vfx/jets'
 import { useAudioStore } from '../state/audioStore'
 import { getAudio, type AudioGraph } from './audio'
 import { gainInto, noiseSource } from './synth'
@@ -29,12 +30,15 @@ type Voices = {
   skid: GainNode
   fanFilter: BiquadFilterNode
   fan: GainNode
+  jetFilter: BiquadFilterNode
+  jets: GainNode
   stop: () => void
 }
 
 // The car's continuous sounds, all on the car bus (which fades out while paused):
 // motor and inverter whine following the speed, thruster roar following the flames, wind
-// growing with speed, tyre squeal from sliding wheels, and the fans' whine with suction.
+// growing with speed, tyre squeal from sliding wheels, the fans' whine with suction and the
+// cold-gas jets' hiss.
 function createVoices(a: AudioGraph): Voices {
   const { ctx, car } = a
   const sources: AudioScheduledSourceNode[] = []
@@ -87,6 +91,11 @@ function createVoices(a: AudioGraph): Voices {
   const fanFilter = filter('bandpass', 900, 5, fan)
   noiseInto(fanFilter)
 
+  // Jets: a hiss of high noise.
+  const jets = gainInto(a, car, 0)
+  const jetFilter = filter('bandpass', TUNING.audio.jets.pitch, 1.5, jets)
+  noiseInto(filter('highpass', 3000, 0.7, jetFilter))
+
   for (const s of sources) {
     if (s instanceof AudioBufferSourceNode) s.start(0, Math.random() * (a.noise.duration - 0.1))
     else s.start()
@@ -104,9 +113,11 @@ function createVoices(a: AudioGraph): Voices {
     skid,
     fanFilter,
     fan,
+    jetFilter,
+    jets,
     stop: () => {
       for (const s of sources) s.stop()
-      for (const g of [motor, whine, thruster, wind, skid, fan]) g.disconnect()
+      for (const g of [motor, whine, thruster, wind, skid, fan, jets]) g.disconnect()
     },
   }
 }
@@ -115,15 +126,17 @@ type CarAudioProps = {
   body: RefObject<RapierRigidBody | null>
   telemetry: RefObject<CarTelemetry>
   thrust: RefObject<number> // 0–1, the smoothed flame size
+  jetLevels: RefObject<JetLevels> // 0–1, the smoothed jet plumes
   abilities: RefObject<AbilityState>
 }
 
-export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudioProps) {
+export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities }: CarAudioProps) {
   const started = useAudioStore((s) => s.started)
   const voices = useRef<Voices | null>(null)
   // Last-seen state, to play one-shots on changes.
   const seen = useRef({
     boosting: false,
+    lifting: false,
     hops: abilities.current.hops,
     landings: telemetry.current.landings,
     respawns: telemetry.current.respawns,
@@ -142,13 +155,15 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
 
   useFrame(() => {
     const t = telemetry.current
-    const { boosting, hops } = abilities.current
+    const { boosting, lifting, hops } = abilities.current
     const s = seen.current
     if (boosting && !s.boosting) sfx.boostBurst()
+    if (lifting && !s.lifting) sfx.jetBurst()
     if (hops !== s.hops) sfx.hop()
     if (t.landings !== s.landings) sfx.landing(t.landingImpact)
     if (t.respawns !== s.respawns) sfx.respawn()
     s.boosting = boosting
+    s.lifting = lifting
     s.hops = hops
     s.landings = t.landings
     s.respawns = t.respawns
@@ -192,6 +207,11 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
     const { suction } = abilities.current
     set(v.fan.gain, mix.fan * suction)
     set(v.fanFilter.frequency, MathUtils.lerp(fan.idlePitch, fan.fullPitch, suction))
+
+    const j = jetLevels.current
+    const hiss = Math.min(1, j.lift + TUNING.audio.jets.rollLevel * Math.max(j.left, j.right))
+    set(v.jets.gain, mix.jets * hiss)
+    set(v.jetFilter.frequency, TUNING.audio.jets.pitch * (0.8 + 0.2 * hiss))
   })
 
   return null

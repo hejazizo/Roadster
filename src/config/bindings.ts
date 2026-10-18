@@ -8,6 +8,8 @@ export type ButtonAction =
   | 'hop'
   | 'handbrake'
   | 'fans' // held: underbody suction
+  | 'lift' // held: cold-gas jets push along the car's up
+  | 'airRoll' // held in the air: steer rolls the car
   | 'reset'
   | 'pause'
   | 'restart' // during a run
@@ -79,6 +81,9 @@ export const BINDINGS: {
     hop: { keys: ['Space'], pad: [A] },
     handbrake: { keys: ['KeyE'], pad: [X] },
     fans: { keys: ['KeyF'], pad: [LB] },
+    lift: { keys: ['KeyG'], pad: [RB] },
+    // The handbrake's button: it does nothing in the air.
+    airRoll: { keys: ['KeyE'], pad: [X] },
     reset: { keys: ['KeyR'], pad: [Y] },
     pause: { keys: ['Escape'], pad: [MENU] },
     restart: { keys: ['Enter'], pad: [VIEW] },

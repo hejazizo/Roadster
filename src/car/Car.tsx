@@ -25,6 +25,7 @@ import CarModel from './CarModel'
 import { createDrivingState, resetDriving, stepDriving } from './handling'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray, type Spawn } from './respawn'
 import { resetTelemetry, stepTelemetry, type CarTelemetry } from './telemetry'
+import type { JetLevels } from '../vfx/jets'
 import { released, useCarControls } from './useCarControls'
 
 const { chassis, wheels, suspension } = TUNING.car
@@ -53,9 +54,10 @@ type CarProps = {
   telemetry: RefObject<CarTelemetry>
   // The level's start pose; the car returns here on a restart or level change.
   spawn: Spawn
+  jets: boolean // the level allows lift and air roll
 }
 
-export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
+export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps) {
   const { world, rapier } = useRapier()
   const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
@@ -67,6 +69,9 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
   // 0–1, smoothed from boosting/gliding; sizes the flames and embers.
   const thrust = useRef(0)
   const nozzles = useRef<(Group | null)[]>([])
+  // 0–1, smoothed from lift and roll; sizes the cold-gas plumes and vapour.
+  const jetLevels = useRef<JetLevels>({ lift: 0, left: 0, right: 0 })
+  const jetNozzles = useRef<(Group | null)[]>([])
   const tailLight = useRef<MeshStandardMaterial | null>(null)
   const tailLightBase = useRef<number | null>(null)
   const feedback = useRef({ boosting: false, landings: telemetry.current.landings })
@@ -130,20 +135,28 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
     const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     vc.updateVehicle(world.timestep, solidOnly)
     const probe = { world, ray: ray.current, flags: solidOnly }
-    stepAbilities(abilities.current, body, vc, c, world.timestep, assist, probe)
-    stepTelemetry(telemetry.current, body, vc, c, world.timestep)
+    stepAbilities(abilities.current, body, vc, c, world.timestep, assist, probe, jets)
+    const contacts = { world, collider: body.collider(0) }
+    stepTelemetry(telemetry.current, body, vc, c, world.timestep, abilities.current, contacts)
     stepSafePoint(safePoint.current, body, vc, world, ray.current, solidOnly, world.timestep)
   })
 
   // Visual wheels follow the controller's suspension, steering and spin.
   useFrame((_, dt) => {
-    const { fuel, grounded, boosting, gliding, fans, suction, hold } = abilities.current
+    const { fuel, grounded, boosting, gliding, fans, suction, hold, lifting, roll } =
+      abilities.current
     const t = telemetry.current
     if (!useRaceStore.getState().paused) {
       const { glideLevel, attack, release } = TUNING.vfx.flame
       const target = boosting ? 1 : gliding ? glideLevel : 0
       const rate = target > thrust.current ? attack : release
       thrust.current = MathUtils.damp(thrust.current, target, rate, dt)
+      const j = jetLevels.current
+      const follow = (level: number, to: number) =>
+        MathUtils.damp(level, to, to > level ? TUNING.vfx.jets.attack : TUNING.vfx.jets.release, dt)
+      j.lift = follow(j.lift, lifting ? 1 : 0)
+      j.right = follow(j.right, Math.max(0, roll)) // positive roll lifts the left side
+      j.left = follow(j.left, Math.max(0, -roll))
     }
 
     const light = tailLight.current
@@ -155,7 +168,8 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
     const fb = feedback.current
     if (boosting && !fb.boosting) rumble(BOOST_RUMBLE.strength, BOOST_RUMBLE.ms)
     if (t.landings !== fb.landings) {
-      rumble(LANDING_RUMBLE.strength * t.landingImpact, LANDING_RUMBLE.ms)
+      const strength = t.landingKind === 'bad' ? 1 : t.landingImpact
+      rumble(LANDING_RUMBLE.strength * strength, LANDING_RUMBLE.ms)
     }
     fb.boosting = boosting
     fb.landings = t.landings
@@ -181,6 +195,13 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
       fans,
       suction,
       hold,
+      lifting,
+      airborne: !t.touching,
+      height: t.height,
+      verticalSpeed: t.verticalSpeed,
+      rollTurns: t.rollTurns,
+      landings: t.landings,
+      landingKind: t.landingKind,
     })
     const vc = vehicle.current
     if (!vc) return
@@ -212,14 +233,29 @@ export default function Car({ ref, visualRef, telemetry, spawn }: CarProps) {
               spinGroups={spinGroups}
               nozzles={nozzles}
               thrust={thrust}
+              jetNozzles={jetNozzles}
+              jetLevels={jetLevels}
               tailLight={tailLight}
             />
           </Suspense>
         </group>
       </RigidBody>
       {/* World-space effects, outside the moving body. */}
-      <CarEffects body={ref} telemetry={telemetry} thrust={thrust} nozzles={nozzles} />
-      <CarAudio body={ref} telemetry={telemetry} thrust={thrust} abilities={abilities} />
+      <CarEffects
+        body={ref}
+        telemetry={telemetry}
+        thrust={thrust}
+        nozzles={nozzles}
+        jetLevels={jetLevels}
+        jetNozzles={jetNozzles}
+      />
+      <CarAudio
+        body={ref}
+        telemetry={telemetry}
+        thrust={thrust}
+        jetLevels={jetLevels}
+        abilities={abilities}
+      />
     </>
   )
 }

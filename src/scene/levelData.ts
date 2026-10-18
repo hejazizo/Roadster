@@ -43,6 +43,7 @@ export type Level = {
   fleet: Box[] // parked vehicles, in a row
   road: { points: [number, number][]; width: number } // closed circuit, visual only
   rings: Ring[] // time-trial checkpoints in order; the last one is the start/finish arch
+  jets?: boolean // the car's cold-gas jets (lift and air roll) work here; on unless false
 }
 
 export const NORTH = Math.PI

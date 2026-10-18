@@ -29,6 +29,20 @@ export const sfx = {
       tone(a, out, { at, freq: 90, freqEnd: 45, decay: 0.25, gain: 0.7 * level })
     }),
 
+  // Jets firing: a sharp burst of hiss over a soft low whump.
+  jetBurst: () =>
+    play((a, out, at) => {
+      const level = mix.oneShots
+      noise(a, out, {
+        at,
+        attack: 0.005,
+        decay: 0.35,
+        gain: 0.45 * level,
+        filter: { type: 'highpass', freq: 5000, freqEnd: 2500 },
+      })
+      tone(a, out, { at, freq: 70, freqEnd: 40, decay: 0.2, gain: 0.4 * level })
+    }),
+
   // An upward pop with a puff of air.
   hop: () =>
     play((a, out, at) => {

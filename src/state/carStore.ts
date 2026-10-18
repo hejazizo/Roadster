@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Hold } from '../car/abilities'
+import type { LandingKind } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
 
 export type CarState = {
@@ -12,6 +13,13 @@ export type CarState = {
   fans: boolean
   suction: number // 0–1
   hold: Hold
+  lifting: boolean
+  airborne: boolean // neither wheels nor chassis on the ground
+  height: number // m, wheels above the ground below
+  verticalSpeed: number // m/s, positive up
+  rollTurns: number // since leaving the ground, + left side up
+  landings: number // bumped on every landing
+  landingKind: LandingKind // of the last one
 }
 
 // Read-only mirror of the car's state for the UI. The car owns the real state (in refs,
@@ -26,4 +34,11 @@ export const useCarStore = create<CarState>(() => ({
   fans: false,
   suction: 0,
   hold: 'none',
+  lifting: false,
+  airborne: false,
+  height: 0,
+  verticalSpeed: 0,
+  rollTurns: 0,
+  landings: 0,
+  landingKind: 'wheels',
 }))

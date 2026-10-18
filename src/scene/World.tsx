@@ -31,7 +31,13 @@ export default function World() {
         <Physics gravity={TUNING.world.gravity} updatePriority={-1} paused={paused}>
           {/* Keyed by level, so a level change rebuilds its colliders and rings from scratch. */}
           <Level key={`level-${level.id}`} level={level} />
-          <Car ref={carRef} visualRef={carVisualRef} telemetry={telemetry} spawn={level.spawn} />
+          <Car
+            ref={carRef}
+            visualRef={carVisualRef}
+            telemetry={telemetry}
+            spawn={level.spawn}
+            jets={level.jets !== false}
+          />
           <Race key={`race-${level.id}`} level={level} car={carRef} />
           {/* Inside Physics so the chase cam can raycast against the level. */}
           <CameraRig target={carVisualRef} body={carRef} telemetry={telemetry} />

@@ -3,9 +3,11 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import { useRef, type RefObject } from 'react'
 import { Color, MathUtils, Vector3, type Object3D } from 'three'
 import type { CarTelemetry } from '../car/telemetry'
+import { TUNING } from '../config/tuning'
 import { useRaceStore } from '../state/raceStore'
 import Particles, { type ParticlesHandle } from './Particles'
 import TireMarks from './TireMarks'
+import type { JetLevels } from './jets'
 
 // Embers and heat behind the nozzles while thrusting (per nozzle, at full thrust).
 const EMBER_RATE = 70 // per second
@@ -20,6 +22,9 @@ const DUST_COLOR = new Color('#b9ab8f')
 const SMOKE_RATE = 18
 const SMOKE_COLOR = new Color('#d8d8d8')
 const SMOKE_MIN_SKID = 0.4
+// Cold-gas vapour from the jets, and the cloud a clean landing under lift kicks up.
+const VAPOUR_COLOR = new Color('#eef3f8')
+const VAPOUR_SPEED = 9 // m/s out of the nozzle at full thrust
 
 const pos = new Vector3()
 const dir = new Vector3()
@@ -38,15 +43,26 @@ type CarEffectsProps = {
   telemetry: RefObject<CarTelemetry>
   thrust: RefObject<number>
   nozzles: RefObject<(Object3D | null)[]>
+  jetLevels: RefObject<JetLevels>
+  jetNozzles: RefObject<(Object3D | null)[]> // each with its JetLevels key in userData.channel
 }
 
-// World-space effects around the car: exhaust embers, landing dust, tyre smoke and marks.
-export default function CarEffects({ body, telemetry, thrust, nozzles }: CarEffectsProps) {
+// World-space effects around the car: exhaust embers, jet vapour, landing dust and vapour,
+// tyre smoke and marks.
+export default function CarEffects({
+  body,
+  telemetry,
+  thrust,
+  nozzles,
+  jetLevels,
+  jetNozzles,
+}: CarEffectsProps) {
   const embers = useRef<ParticlesHandle>(null)
   const dust = useRef<ParticlesHandle>(null)
+  const vapour = useRef<ParticlesHandle>(null)
   const landings = useRef(telemetry.current.landings)
   // Fractional particles carried to the next frame, so low rates still emit.
-  const carry = useRef({ ember: 0, heat: 0, smoke: 0 })
+  const carry = useRef({ ember: 0, heat: 0, smoke: 0, vapour: 0 })
 
   // Emits `rate * dt` particles on average, keeping the remainder in carry[key].
   const count = (key: keyof typeof carry.current, rate: number, dt: number) => {
@@ -88,6 +104,38 @@ export default function CarEffects({ body, telemetry, thrust, nozzles }: CarEffe
             .add(jitter(spread))
           spread.copy(pos).addScaledVector(dir, rand(0.2, 0.6 * power))
           embers.current.emit(spread, vel, rand(0.25, 0.4), rand(0.25, 0.45), HEAT_COLOR)
+        }
+      }
+    }
+
+    const { vapourRate, landingVapour } = TUNING.vfx.jets
+    if (vapour.current) {
+      for (const nozzle of jetNozzles.current) {
+        const level = nozzle ? jetLevels.current[nozzle.userData.channel as keyof JetLevels] : 0
+        if (!nozzle || level < 0.05) continue
+        nozzle.updateWorldMatrix(true, false)
+        nozzle.getWorldPosition(pos)
+        nozzle.getWorldDirection(dir).negate() // −Z is the exhaust
+        for (let i = count('vapour', vapourRate * level, dt); i > 0; i--) {
+          vel
+            .copy(dir)
+            .multiplyScalar(VAPOUR_SPEED * level * rand(0.5, 1.1))
+            .addScaledVector(carVel, 0.6)
+            .add(jitter(spread).multiplyScalar(1.2))
+          spread.copy(pos).addScaledVector(dir, rand(0.1, 0.5))
+          vapour.current.emit(spread, vel, rand(0.5, 0.9), rand(0.25, 0.45), VAPOUR_COLOR)
+        }
+      }
+      // A clean landing under lift: a white cloud rolling out from under the car.
+      const p = body.current?.translation()
+      if (newLanding && t.landingKind === 'clean' && p) {
+        for (let i = 0; i < landingVapour; i++) {
+          const angle = Math.random() * Math.PI * 2
+          const speed = rand(3, 7)
+          vel.set(Math.cos(angle) * speed, rand(0.3, 1.5), Math.sin(angle) * speed)
+          spread.set(p.x, p.y, p.z).add(jitter(tangent).multiplyScalar(1.2))
+          spread.y -= 0.4
+          vapour.current.emit(spread, vel, rand(1, 1.8), rand(0.8, 1.4), VAPOUR_COLOR)
         }
       }
     }
@@ -146,6 +194,15 @@ export default function CarEffects({ body, telemetry, thrust, nozzles }: CarEffe
         grow={3}
         fadeIn={0.1}
         opacity={0.55}
+      />
+      <Particles
+        ref={vapour}
+        count={700}
+        drag={2.2}
+        lift={0.5}
+        grow={3.5}
+        fadeIn={0.05}
+        opacity={0.6}
       />
     </>
   )

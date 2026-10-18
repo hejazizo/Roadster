@@ -146,6 +146,8 @@ function createSim(
   const ringsHit = new Set<number>()
   let riding = 0 // s on all four wheels
   const assist = { ...TUNING.assists[mode], ...assistOverride }
+  const jets = ground === 'pad' || ground.jets !== false
+  const contacts = { world, collider }
   const probe = {
     world,
     ray: new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
@@ -169,8 +171,8 @@ function createSim(
     step(c: CarControls) {
       stepDriving(driving, body, vc, c, DT, assist, abilities.suction > 0)
       vc.updateVehicle(DT, probe.flags)
-      stepAbilities(abilities, body, vc, c, DT, assist, probe)
-      stepTelemetry(telemetry, body, vc, c, DT)
+      stepAbilities(abilities, body, vc, c, DT, assist, probe, jets)
+      stepTelemetry(telemetry, body, vc, c, DT, abilities, contacts)
       world.step()
       sim.time += DT
       rings.forEach((ring, i) => {
@@ -231,6 +233,7 @@ function pose(sim: Sim) {
 }
 
 const deg = (rad: number) => (rad * 180) / Math.PI
+const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
 const grounded = (sim: Sim) => sim.telemetry.grounded
 
 // Rest height of the chassis centre above flat ground (optionally with the fans held).
@@ -411,13 +414,16 @@ type Launch = {
   glideUntil?: number // let go of glide past this distance along the heading
   probeZ?: number // record the chassis height where the car crosses this z
   boost?: boolean // hold boost the whole time
+  // Hold lift between these distances along the heading (on the ground it lifts off), or from
+  // the hop on if 'hop'.
+  lift?: [number, number] | 'hop'
   time?: number
 }
 
 // Drives on full throttle, optionally hops and glides, and follows the car until it has
 // landed and settled, or fallen out of the world.
 function launch(launchOptions: Launch) {
-  const { at, yaw, speed, hopAt, glide, glideUntil = Infinity, boost, probeZ } = launchOptions
+  const { at, yaw, speed, hopAt, glide, glideUntil = Infinity, boost, probeZ, lift } = launchOptions
   const { time = 12 } = launchOptions
   const sim = createSim(TEST_LEVEL, [at[0], at[1] + REST, at[2]], yaw, speed)
   const start = new Vector3(...at)
@@ -435,10 +441,12 @@ function launch(launchOptions: Launch) {
     const hopNow = hopAt !== undefined && !hopped && along >= hopAt
     if (hopNow) hopped = true
     const airborne = !grounded(sim)
+    const lifting = lift === 'hop' ? hopped : !!lift && along >= lift[0] && along < lift[1]
     sim.step(
       drive({
         throttle: 1,
         boost: !!boost,
+        lift: lifting,
         hopPressed: hopNow,
         hop:
           !!glide && along < glideUntil && (hopped || hopAt === undefined) && (airborne || hopNow),
@@ -472,6 +480,8 @@ function launch(launchOptions: Launch) {
     minUp,
     bounced: lostContactAfterLanding,
     fuel: sim.abilities.fuel,
+    landingKind: sim.telemetry.landings > 0 ? sim.telemetry.landingKind : '—',
+    impact: sim.telemetry.landingSpeed,
   }
   sim.free()
   return result
@@ -488,7 +498,7 @@ function jumps() {
     check(
       `big kicker at ${v} m/s: lands upright`,
       !!r.landing && r.minUp > 0.8,
-      `land z ${f1(r.landing?.z ?? NaN)}, ring ${r.rings.includes(0) ? 'hit' : 'missed'}, min up ${f2(r.minUp)}, ${r.bounced ? 'bounced' : 'stuck'}`,
+      `land z ${f1(r.landing?.z ?? NaN)}, ring ${r.rings.includes(0) ? 'hit' : 'missed'}, min up ${f2(r.minUp)}, ${r.bounced ? 'bounced' : 'stuck'}, ${r.landingKind} landing at ${f1(r.impact)} m/s`,
     )
   }
   // 20 m gap north, over the west kicker (−80, z −141 → −149) to the west arm (z ≤ −170).
@@ -533,6 +543,33 @@ function jumps() {
     crosses.every(Boolean),
     list(SPEEDS, (v) => `${v}:${crosses[SPEEDS.indexOf(v)] ? 'lands' : 'falls'}`),
   )
+  // The jets: lift is weak over the void (it fades with height above the ground), so held
+  // from the hop it doesn't carry the car across. Lifting off before the edge and then
+  // gliding is the strong line; how far over it lands says whether the gap is still a test.
+  const gapLift = SPEEDS.map((v) =>
+    launch({ at: [0, 0, -120], yaw: NORTH, speed: v, hopAt: 29, lift: 'hop' }),
+  )
+  check(
+    '80 m gap: hop + lift held falls short',
+    gapLift.every((r) => r.fell),
+    list(SPEEDS, (v) => `${v}:${gapLift[SPEEDS.indexOf(v)].fell ? 'falls' : 'lands'}`),
+  )
+  const liftGlide = (lift: [number, number] | 'hop', hopAt?: number) =>
+    SPEEDS.map((v) => {
+      const runs = [80, 100, 115, 130].map((glideUntil) =>
+        launch({ at: [0, 0, -120], yaw: NORTH, speed: v, hopAt, glide: true, glideUntil, lift }),
+      )
+      const landed = runs.filter((r) => !r.fell && r.landing)
+      return landed.length ? Math.max(...landed.map((r) => -r.landing!.z)) - 150 : NaN
+    })
+  const farthest = (zs: number[]) =>
+    list(SPEEDS, (v) => {
+      const d = zs[SPEEDS.indexOf(v)]
+      return `${v}:${isNaN(d) ? 'falls' : f1(d)}`
+    })
+  info('80 m gap: lift-off at the edge + glide, m past the edge', farthest(liftGlide([20, 30])))
+  info('80 m gap: hop + glide + lift, m past the edge', farthest(liftGlide('hop', 29)))
+  info('80 m gap: hop + glide, m past the edge', farthest(liftGlide([0, 0], 29)))
 }
 
 function rings() {
@@ -548,6 +585,10 @@ function rings() {
   const boosted = SPEEDS.map((v) =>
     launch({ at, yaw: NORTH, speed: v, hopAt: 24, boost: true, probeZ }),
   )
+  const lifted = SPEEDS.map((v) =>
+    launch({ at, yaw: NORTH, speed: v, hopAt: 24, lift: 'hop', probeZ }),
+  )
+  const liftOff = SPEEDS.map((v) => launch({ at, yaw: NORTH, speed: v, lift: [16, 25], probeZ }))
   const hit = (rs: typeof glide) =>
     list(SPEEDS, (v) => `${v}:${rs[SPEEDS.indexOf(v)].rings.includes(3) ? 'hit' : '–'}`)
   const heights = (rs: typeof glide) => list(SPEEDS, (v) => f1(rs[SPEEDS.indexOf(v)].heightAtProbe))
@@ -571,6 +612,10 @@ function rings() {
   info('height at the ring, hop + glide', heights(glide))
   info('height at the ring, plain hop', heights(plain))
   info('height at the ring, boost + hop', heights(boosted))
+  info('void ring: hop + lift held', hit(lifted))
+  info('height at the ring, hop + lift held', heights(lifted))
+  info('void ring: lift-off at the edge', hit(liftOff))
+  info('height at the ring, lift-off at the edge', heights(liftOff))
   info(
     'peak height, hop + glide',
     list(SPEEDS, (v) => f1(glide[SPEEDS.indexOf(v)].peakY)),
@@ -631,11 +676,124 @@ function hopTiming() {
   check('press 0.3 s after an edge does not', ledge(0.3) === 0, '')
 }
 
+// ---------------------------------------------------------------- jets on the pad
+
+// Lift held from a standstill for `hold` s (or until the tank first runs dry), then let go:
+// how high the wheels get, how fast it climbs, how much fuel it takes and how it lands.
+function liftOff(hold: number) {
+  const sim = createSim('pad', [0, REST, 0], 0)
+  let peak = 0
+  let climbAt03 = NaN
+  let liftTime = 0
+  let fuelUsed = NaN
+  let letGo = false
+  while (sim.time < hold + 6) {
+    letGo ||= sim.time >= hold || sim.abilities.fuel <= 0
+    if (letGo && isNaN(fuelUsed)) fuelUsed = TUNING.car.fuel.max - sim.abilities.fuel
+    sim.step(drive({ lift: !letGo }))
+    if (sim.abilities.lifting) liftTime += DT
+    // The first step's probe has no colliders to hit yet.
+    if (Number.isFinite(sim.telemetry.height)) peak = Math.max(peak, sim.telemetry.height)
+    if (isNaN(climbAt03) && sim.time >= 0.3) climbAt03 = sim.body.linvel().y
+  }
+  const result = {
+    peak,
+    climbAt03,
+    liftTime,
+    fuelUsed,
+    kind: sim.telemetry.landingKind,
+    impact: sim.telemetry.landingSpeed,
+  }
+  sim.free()
+  return result
+}
+
+function jetsOnPad() {
+  section('Jets (flat pad)')
+  const quick = liftOff(1)
+  check(
+    'standstill lift-off climbs',
+    quick.climbAt03 > 0 && quick.peak > 1,
+    `${f1(quick.climbAt03)} m/s up after 0.3 s, wheels peak ${f1(quick.peak)} m after 1 s, fuel ${f2(quick.fuelUsed)}`,
+  )
+  for (const hold of [0.25, 0.5, 2]) {
+    const r = liftOff(hold)
+    info(
+      `lift held ${hold} s`,
+      `wheels peak ${f1(r.peak)} m, fuel ${f2(r.fuelUsed)}, lands ${r.kind} at ${f1(r.impact)} m/s`,
+    )
+  }
+  const full = liftOff(30)
+  info(
+    'lift held until the tank is empty',
+    `${f1(full.liftTime)} s of lift, wheels peak ${f1(full.peak)} m, lands ${full.kind} at ${f1(full.impact)} m/s`,
+  )
+}
+
+// Lift off the pad for `lift` s, roll right to `turns` turns and stop the spin there (air roll
+// held, steering against it), then let go of everything: how far it turned in all and how it
+// landed.
+function airRollRun(turns: number, lift = 0.9) {
+  const sim = createSim('pad', [0, REST, 0], 0)
+  let phase: 'lift' | 'roll' | 'free' = 'lift'
+  let landed = false
+  let landings = 0
+  let turned = 0
+  while (sim.time < 8 && !landed) {
+    const t = sim.telemetry
+    if (phase === 'lift' && sim.time >= lift) phase = 'roll'
+    const { forward } = pose(sim)
+    const w = sim.body.angvel()
+    const spin = (w.x * forward.x + w.y * forward.y + w.z * forward.z) / (Math.PI * 2) // turns/s
+    const error = turns - t.rollTurns
+    if (phase === 'roll' && Math.abs(error) < 0.05 && Math.abs(spin) < 0.15) phase = 'free'
+    const steer = clamp1(error * 12 - spin * 2.5)
+    sim.step(
+      drive(phase === 'lift' ? { lift: true } : phase === 'roll' ? { airRoll: true, steer } : {}),
+    )
+    if (!sim.telemetry.touching) turned = sim.telemetry.rollTurns
+    if (phase !== 'lift' && sim.telemetry.landings !== landings) landed = true
+    landings = sim.telemetry.landings
+  }
+  // Let it settle.
+  for (let i = 0; i < 120; i++) sim.step(released())
+  const result = {
+    turned,
+    kind: sim.telemetry.landingKind,
+    speed: sim.telemetry.landingSpeed,
+    upright: pose(sim).up.y,
+  }
+  sim.free()
+  return result
+}
+
+function airRoll() {
+  section('Air roll (flat pad)')
+  const full = airRollRun(0.75)
+  check(
+    'roll ¾ turn and let go: ends a full turn',
+    full.kind !== 'bad' && Math.abs(Math.abs(full.turned) - 1) < 0.15 && full.upright > 0.95,
+    `${f2(full.turned)} turns, ${full.kind} landing at ${f1(full.speed)} m/s, up ${f2(full.upright)}`,
+  )
+  const back = airRollRun(0.25)
+  check(
+    'roll ¼ turn and let go: rolls back upright',
+    back.kind !== 'bad' && Math.abs(back.turned) < 0.15 && back.upright > 0.95,
+    `${f2(back.turned)} turns, ${back.kind} landing at ${f1(back.speed)} m/s, up ${f2(back.upright)}`,
+  )
+  // Rolled upside down and let go: levelling doesn't turn it back over; the Beginner assist
+  // rolls it upright near the ground.
+  const flat = airRollRun(0.5, 1.4)
+  const line = `${f2(flat.turned)} turns, ${flat.kind} landing at ${f1(flat.speed)} m/s, up ${f2(flat.upright)}`
+  if (mode === 'pro')
+    check('rolled inverted and let go: lands on the roof', flat.kind === 'bad', line)
+  else check('rolled inverted and let go: assist rights it', flat.upright > 0.95, line)
+}
+
 // ---------------------------------------------------------------- the Proving Ground
 
 const WEST = -Math.PI / 2
 const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
-const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
 
 // Steers towards (x, z) and holds about `speed` m/s, slower in sharp turns.
 function pursue(sim: Sim, x: number, z: number, speed: number): CarControls {
@@ -694,6 +852,7 @@ function provingGround() {
   )
 
   halfLoop(level)
+  lipDrop(level)
 
   // The fleet: driving into the back of the row bounces off the first car.
   const sedanTail = level.fleet[0].center[2] + level.fleet[0].size[2] / 2
@@ -772,9 +931,9 @@ function loopRun(level: Level, { speed, boost, fans, onRamp }: LoopRun) {
     }
   }
   const end = sim.body.translation()
-  // Back on the asphalt, upright or not, and neither stuck on the loop nor behind it (its
-  // back is ~17 m past the entry).
-  const back = insidePad(end) && end.y < 2.5 && end.z > loop.start[2] - 8
+  // Back on the asphalt or the loop's foot, upright or not (R recovers a car on its roof), and
+  // neither up on the loop nor behind it (its back is ~17 m past the entry).
+  const back = insidePad(end) && end.y < 2.5 && end.z > loop.start[2] - 12
   const result = {
     sim,
     arrival,
@@ -785,6 +944,7 @@ function loopRun(level: Level, { speed, boost, fans, onRamp }: LoopRun) {
     topSpeed,
     back,
     end,
+    endUp: pose(sim).up.y,
     scrapes: sim.scrapes,
     minSuspension: sim.minSuspension,
   }
@@ -799,9 +959,9 @@ const surfaceSpeed = (sim: Sim) => {
 }
 
 // Fans-on driver: throttle (and boost when slow) up the ramp until upside down, stop there on
-// the hold brake for `hold` s, then drive on off the lip. Pro holds the fans; Beginner leaves
-// them to the assist.
-function fansDriver(hold: number) {
+// the hold brake for `hold` s, then drive on off the lip, and hand over to `afterLip` (no
+// input if not given). Pro holds the fans; Beginner leaves them to the assist.
+function fansDriver(hold: number, afterLip?: (sim: Sim) => CarControls) {
   let phase: 'climb' | 'stop' | 'go' = 'climb'
   let stoppedAt = 0
   // `creep`: how far the parked car moves from half a second into the hold to its end.
@@ -836,7 +996,8 @@ function fansDriver(hold: number) {
     }
     if (phase === 'go') {
       if (!on && up.y < -0.5) stats.leftLip = true
-      return stats.leftLip ? released() : drive({ throttle: 1, fans })
+      if (!stats.leftLip) return drive({ throttle: 1, fans })
+      return afterLip ? afterLip(sim) : released()
     }
     // Past vertical, brake down to a crawl so it stops before the lip.
     const speed = surfaceSpeed(sim)
@@ -844,6 +1005,73 @@ function fansDriver(hold: number) {
     return drive({ throttle: 1, boost: speed < 6, fans })
   }
   return { onRamp, stats }
+}
+
+// After the lip: roll upright (short way round), then brake the fall with lift, so the car is
+// still slowing as it touches down.
+function dropDriver(sim: Sim): CarControls {
+  const { up, v } = pose(sim)
+  const left = new Vector3(1, 0, 0).applyQuaternion(q)
+  const roll = Math.atan2(left.y, up.y)
+  if (up.y < 0.6) return drive({ airRoll: true, steer: roll > 0 ? -1 : 1 })
+  const { height } = sim.telemetry
+  const down = -v.y
+  const { liftG } = TUNING.car.jets
+  const brake = 0.5 * (liftG - 1) * -TUNING.world.gravity[1] // a cautious net deceleration
+  const lift = down > Math.sqrt(2 * brake * Math.max(height, 0)) + 1 || (height < 1.5 && down > 0.5)
+  return drive({ lift })
+}
+
+// Climb with the fans, hold under the top for 2 s, drive off the lip and either fly the drop
+// (roll and lift) or do nothing; reports the first landing after the lip.
+function dropRun(level: Level, speed: number, fly: boolean) {
+  const drop = {
+    fuelAtLip: NaN,
+    landed: false,
+    kind: '—' as string,
+    speed: NaN,
+    turns: NaN,
+    fuelAtLanding: NaN,
+  }
+  let landings = 0
+  const afterLip = (sim: Sim) => {
+    const t = sim.telemetry
+    if (isNaN(drop.fuelAtLip)) {
+      drop.fuelAtLip = sim.abilities.fuel
+      landings = t.landings
+    }
+    if (!drop.landed && t.landings !== landings) {
+      Object.assign(drop, {
+        landed: true,
+        kind: t.landingKind,
+        speed: t.landingSpeed,
+        turns: t.rollTurns,
+        fuelAtLanding: sim.abilities.fuel,
+      })
+    }
+    return fly && !drop.landed ? dropDriver(sim) : released()
+  }
+  const driver = fansDriver(2, afterLip)
+  const r = loopRun(level, { speed, fans: true, onRamp: driver.onRamp })
+  return { ...r, ...drop, held: driver.stats.holdTime }
+}
+
+function lipDrop(level: Level) {
+  // From 20 m/s the car parks short of the top and crawls to the lip under the fans, which
+  // leaves too little fuel for the jets; the shared tank is the limit (see ROADMAP notes).
+  for (const v of [20, 22, 25]) {
+    const r = dropRun(level, v, true)
+    const ok =
+      r.landed && r.kind === 'clean' && r.speed < TUNING.car.landing.badImpact && r.endUp > 0.9
+    const line = `held ${f1(r.held)} s, fuel ${f2(r.fuelAtLip)} at the lip, ${f2(r.fuelAtLanding)} at landing, ${r.kind} at ${f1(r.speed)} m/s, ${f2(Math.abs(r.turns))} turns, ends ${r.endUp > 0.9 ? 'upright' : 'not upright'} y ${f1(r.end.y)} z ${f1(r.end.z)}`
+    if (v === 20) info(`drop from ${v} m/s: roll + lift`, line)
+    else check(`drop from ${v} m/s: roll + lift, clean landing`, ok, line)
+  }
+  const idle = dropRun(level, 25, false)
+  const line = `${idle.kind} landing at ${f1(idle.speed)} m/s, ${f2(Math.abs(idle.turns))} turns, ends ${idle.endUp > 0.9 ? 'upright' : idle.endUp < 0 ? 'on its roof' : 'on its side'}`
+  if (mode === 'pro') {
+    check('drop doing nothing: lands on the roof', idle.kind === 'bad' && idle.endUp < 0, line)
+  } else info('drop doing nothing (auto-right)', line)
 }
 
 function halfLoop(level: Level) {
@@ -873,7 +1101,7 @@ function halfLoop(level: Level) {
     check(
       `no fans, ${v} m/s${boost ? ' + boost' : ''}: ends back on the pad`,
       r.back && r.runUpMinUp > 0.9 && (v > 35 || r.scrapes === 0),
-      `arrives ${f1(r.arrival)} m/s, peak ${f1(r.peak)} m, ${r.overTop ? 'over the top' : 'falls off'}, ${r.minUp < 0 ? 'turned over' : 'upright'}, chassis contact ${r.scrapes} steps, min susp ${f2(r.minSuspension)} m, ends y ${f1(r.end.y)} z ${f1(r.end.z)}`,
+      `arrives ${f1(r.arrival)} m/s, peak ${f1(r.peak)} m, ${r.overTop ? 'over the top' : 'falls off'}, ${r.minUp < 0 ? 'turned over' : 'upright'}, ends ${r.endUp < 0 ? 'on its roof' : 'upright'}, chassis contact ${r.scrapes} steps, min susp ${f2(r.minSuspension)} m, ends y ${f1(r.end.y)} z ${f1(r.end.z)}`,
     )
   }
   // The slowest arrival that rides over the inverted top without fans.
@@ -948,6 +1176,8 @@ for (const m of modes) {
     jumps()
     rings()
     hopTiming()
+    jetsOnPad()
+    airRoll()
   }
   if (levels.includes(PROVING_GROUND.id)) provingGround()
 }

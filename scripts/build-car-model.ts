@@ -100,6 +100,23 @@ const THRUSTERS: { name: string; at: vec3 }[] = [
   { name: 'thruster_right', at: [-0.128, 0.208, -0.93] },
 ]
 
+// Cold-gas jet empties, in source units (measured), each turned so its −Z points along the
+// exhaust: four under the floor (at y ≈ 0.045) between the wheels blowing down, and two low on
+// each sill blowing outwards, for roll.
+const DOWN: [number, number, number, number] = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]
+const OUT_LEFT: [number, number, number, number] = [0, -Math.SQRT1_2, 0, Math.SQRT1_2]
+const OUT_RIGHT: [number, number, number, number] = [0, Math.SQRT1_2, 0, Math.SQRT1_2]
+const JETS: { name: string; at: vec3; rotation: [number, number, number, number] }[] = [
+  { name: 'jet_under_fl', at: [0.22, 0.045, 0.25], rotation: DOWN },
+  { name: 'jet_under_fr', at: [-0.22, 0.045, 0.25], rotation: DOWN },
+  { name: 'jet_under_rl', at: [0.22, 0.05, -0.3], rotation: DOWN },
+  { name: 'jet_under_rr', at: [-0.22, 0.05, -0.3], rotation: DOWN },
+  { name: 'jet_left_front', at: [0.385, 0.2, 0.2], rotation: OUT_LEFT },
+  { name: 'jet_left_rear', at: [0.385, 0.2, -0.25], rotation: OUT_LEFT },
+  { name: 'jet_right_front', at: [-0.385, 0.2, 0.2], rotation: OUT_RIGHT },
+  { name: 'jet_right_rear', at: [-0.385, 0.2, -0.25], rotation: OUT_RIGHT },
+]
+
 const WHEEL_NAMES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']
 // +X is the car's left, so right wheels turn the template's outer face round to −X.
 const RIGHT = [1, 3]
@@ -645,10 +662,13 @@ WHEEL_NAMES.forEach((name, i) => {
 })
 
 for (const { name, at } of THRUSTERS) scene.addChild(doc.createNode(name).setTranslation(fit(at)))
+for (const { name, at, rotation } of JETS) {
+  scene.addChild(doc.createNode(name).setTranslation(fit(at)).setRotation(rotation))
+}
 
 scene.setName('car')
 await doc.transform(
-  prune({ keepLeaves: true }), // keep the empty thruster nodes
+  prune({ keepLeaves: true }), // keep the empty thruster and jet nodes
   textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [2048, 2048] }),
   meshopt({ encoder: MeshoptEncoder }),
 )
@@ -672,4 +692,5 @@ const tris = (prims: Primitive[], names: string[]) =>
   prims.map((p, i) => `${names[i]} ${p.getIndices()!.getCount() / 3}`).join(', ')
 console.log(`  body materials: ${tris(bodyParts, BODY_PARTS)}`)
 console.log(`  wheel materials: ${tris(wheelParts, WHEEL_PARTS)}`)
+console.log(`  jets: ${JETS.map(({ name, at }) => `${name} [${round(fit(at))}]`).join(', ')}`)
 console.log(`  size: ${(statSync(OUTPUT).size / 1e6).toFixed(2)} MB`)

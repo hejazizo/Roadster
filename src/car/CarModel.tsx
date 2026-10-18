@@ -11,6 +11,8 @@ import {
 import { CAR_MODEL_URL } from '../config/assets'
 import { TUNING } from '../config/tuning'
 import { paintColor, usePaintStore } from '../state/paintStore'
+import { JET_PREFIX, jetChannel, type JetLevels } from '../vfx/jets'
+import { COLD_GAS } from '../vfx/plumes'
 import ThrusterFlame from '../vfx/ThrusterFlame'
 
 const { wheels, suspension } = TUNING.car
@@ -26,12 +28,14 @@ const TAIL_LIGHT_MATERIAL = 'tail_light'
 const HUB_TOLERANCE = 0.05
 
 type Pose = { position: Vector3; quaternion: Quaternion }
+type Jet = Pose & { channel: keyof JetLevels }
 
 type CarParts = {
   // Bodywork: everything in the model except the wheels.
   body: Object3D
   wheels: (Object3D | undefined)[]
   thrusters: Pose[]
+  jets: Jet[]
   paint: MeshStandardMaterial | null
   tailLight: MeshStandardMaterial | null
 }
@@ -73,11 +77,14 @@ function splitModel(scene: Group): CarParts {
   root.updateMatrixWorld(true)
 
   const thrusters: Pose[] = []
+  const jets: Jet[] = []
   root.traverse((o) => {
-    if (!o.name.startsWith(THRUSTER_PREFIX)) return
+    const thruster = o.name.startsWith(THRUSTER_PREFIX)
+    if (!thruster && !o.name.startsWith(JET_PREFIX)) return
     const quaternion = o.getWorldQuaternion(new Quaternion())
     const position = o.getWorldPosition(new Vector3())
-    thrusters.push({ position, quaternion })
+    if (thruster) thrusters.push({ position, quaternion })
+    else jets.push({ position, quaternion, channel: jetChannel(o.name) })
   })
 
   // Wheels leave the bodywork: the car drives their position, steering and spin.
@@ -89,7 +96,7 @@ function splitModel(scene: Group): CarParts {
     return node
   })
 
-  return { body: root, wheels: wheelNodes, thrusters, paint, tailLight }
+  return { body: root, wheels: wheelNodes, thrusters, jets, paint, tailLight }
 }
 
 type CarModelProps = {
@@ -97,6 +104,8 @@ type CarModelProps = {
   spinGroups: RefObject<(Group | null)[]>
   nozzles: RefObject<(Group | null)[]>
   thrust: RefObject<number>
+  jetNozzles: RefObject<(Group | null)[]>
+  jetLevels: RefObject<JetLevels>
   tailLight: RefObject<MeshStandardMaterial | null>
 }
 
@@ -106,6 +115,8 @@ export default function CarModel({
   spinGroups,
   nozzles,
   thrust,
+  jetNozzles,
+  jetLevels,
   tailLight,
 }: CarModelProps) {
   const { scene } = useGLTF(CAR_MODEL_URL)
@@ -149,7 +160,20 @@ export default function CarModel({
             nozzles.current[i] = g
           }}
         >
-          <ThrusterFlame thrust={thrust} seed={i} />
+          <ThrusterFlame thrust={() => thrust.current} seed={i} />
+        </group>
+      ))}
+      {parts.jets.map(({ position, quaternion, channel }, i) => (
+        <group
+          key={`jet-${i}`}
+          position={position}
+          quaternion={quaternion}
+          ref={(g) => {
+            jetNozzles.current[i] = g
+            if (g) g.userData.channel = channel
+          }}
+        >
+          <ThrusterFlame thrust={() => jetLevels.current[channel]} seed={i + 7} style={COLD_GAS} />
         </group>
       ))}
     </>

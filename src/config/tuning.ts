@@ -150,11 +150,36 @@ export const TUNING = {
       autoAngle: 0.52, // rad, surfaces steeper than this engage the fans on their own (assist)…
       autoRelease: 0.35, // …until the surface is flatter than this
     },
+    // Cold-gas jets: held lift pushes along the car's own up (so firing upside down pushes it
+    // down) and a little forward. The push fades with height above the ground below, so the
+    // jets lift the car off, carry it a few metres up and brake a fall near the ground, but
+    // can't hold it high or replace the glide over a void. Air roll (held, plus steer) spins
+    // the car about its long axis.
+    jets: {
+      liftG: 2.7, // g along the car's up, near the ground
+      forwardG: 0.3, // g along the car's forward while lifting
+      fuelPerSecond: 0.4,
+      fullHeight: 3, // m above the ground (chassis centre) with full lift…
+      fadeHeight: 12, // …fading to minFactor by this height (and over a void)
+      minFactor: 0,
+      riseDrag: 1.5, // 1/s, slows a climb under lift (m/s² per m/s up), so it settles at a hover
+      heightProbe: 50, // m, how far down the ground is looked for
+      rollTorque: 14, // rad/s² of roll spin from full steer while rolling
+      maxRollRate: 5, // rad/s
+      // Air levelling holds the car near upright and lets go as it turns over (angle between
+      // the car's up and the level's, rad), so it can fly inverted.
+      levelCapture: 1.4,
+      levelRelease: 2,
+      autoRightTime: 1.4, // s to impact below which the Beginner assist rolls an inverted car
+      cleanLiftWindow: 0.4, // s, a wheel landing this soon after lift is a clean one
+    },
     // Touchdown settling: spin is damped for a moment after a landing.
     landing: {
       minAirTime: 0.25, // s airborne before a touchdown counts
       assistTime: 0.35, // s
       spinDamping: 8, // 1/s on roll and yaw spin, scaled by the assist level
+      uprightDot: 0.5, // car up · surface normal below this at touchdown: a roof or side landing
+      badImpact: 14, // m/s into the surface: a wheel landing harder than this is a bad one too
     },
     // Respawn point after a fall or R: the last pose that was upright, on all four
     // wheels and away from edges for a moment. Falls back to spawn until one is recorded.
@@ -177,6 +202,7 @@ export const TUNING = {
       airLevel: 1.5, // × airControl.levelRate
       landing: 1, // × landing.spinDamping
       autoFans: 1, // 1 = fans engage on their own on steep surfaces, 0 = only when held
+      autoRight: 1, // 0–1 × jets.maxRollRate, rolling an inverted car upright near the ground
     },
     pro: {
       counterSteer: 0,
@@ -187,6 +213,7 @@ export const TUNING = {
       airLevel: 0.7,
       landing: 0.4,
       autoFans: 0,
+      autoRight: 0,
     },
   },
   input: {
@@ -222,6 +249,7 @@ export const TUNING = {
       boostShake: 0.15, // trauma held while boosting
       shakeDecay: 2.5, // trauma lost per second
       shakeOffset: 0.3, // m of camera and aim offset at full trauma
+      badLandingShake: 0.5, // extra trauma on a roof, side or too-hard landing
       // On a steep surface (a wall, the half-loop) the camera turns its up to the car's; on
       // the floor, gentle ramps and in the air it uses world up.
       surfaceAngleStart: 0.35, // rad of car tilt where the camera starts following its up…
@@ -248,6 +276,14 @@ export const TUNING = {
       attack: 18, // 1/s, how quickly the flame lights
       release: 8, // 1/s, how quickly it dies down
     },
+    // Cold-gas jet plumes and vapour.
+    jets: {
+      length: 0.9, // m at full thrust
+      attack: 25, // 1/s
+      release: 10, // 1/s
+      vapourRate: 40, // particles per second per jet at full thrust
+      landingVapour: 60, // particles in the cloud of a clean landing
+    },
     post: {
       bloomIntensity: 1.2,
       bloomThreshold: 1, // luminance above which pixels bloom (only HDR emissives pass)
@@ -267,6 +303,7 @@ export const TUNING = {
       wind: 0.25,
       skid: 0.3,
       fan: 0.25,
+      jets: 0.3,
       oneShots: 0.8, // hop, landing, boost burst, respawn
       race: 0.6, // countdown, rings, finish
       ui: 0.4,
@@ -287,6 +324,11 @@ export const TUNING = {
     fan: {
       idlePitch: 900, // Hz, band centre at the lightest suction
       fullPitch: 2600, // Hz at full suction
+    },
+    // Jet hiss: high noise, louder with lift; the roll jets alone are quieter.
+    jets: {
+      pitch: 6500, // Hz, band centre
+      rollLevel: 0.4, // roll jets' level as a fraction of lift's
     },
     skid: {
       minSkid: 0.25, // wheel skid (0–1) below which the tyres stay quiet

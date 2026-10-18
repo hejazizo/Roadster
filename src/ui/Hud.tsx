@@ -19,7 +19,7 @@ function Speed() {
 
 function FuelBar() {
   const fuel = useCarStore((s) => s.fuel)
-  const draining = useCarStore((s) => s.boosting || s.gliding || s.suction > 0)
+  const draining = useCarStore((s) => s.boosting || s.gliding || s.suction > 0 || s.lifting)
   const fraction = Math.min(fuel / TUNING.car.fuel.max, 1)
   const className = ['hud-fuel', draining && 'is-draining', fuel <= 0 && 'is-empty']
     .filter(Boolean)
@@ -53,14 +53,53 @@ const HOLD_LABELS = { wall: 'Wall hold', ceiling: 'Ceiling hold' }
 
 function Status() {
   const status = useCarStore((s) =>
-    s.grounded ? (s.drifting ? 'Drifting' : 'Grounded') : s.gliding ? 'Gliding' : 'Airborne',
+    s.grounded
+      ? s.drifting
+        ? 'Drifting'
+        : 'Grounded'
+      : !s.airborne
+        ? 'Overturned' // on its roof or side
+        : s.gliding
+          ? 'Gliding'
+          : 'Airborne',
   )
   const hold = useCarStore((s) => s.hold)
+  const lifting = useCarStore((s) => s.lifting)
   return (
     <div className="hud-statuses">
       <div className={`hud-status is-${status.toLowerCase()}`}>{status}</div>
       {hold !== 'none' && <div className={`hud-status is-${hold}`}>{HOLD_LABELS[hold]}</div>}
+      {lifting && <div className="hud-status is-jets">Jets</div>}
     </div>
+  )
+}
+
+// Height, vertical speed and roll turns, shown while the car is off the ground.
+function AirReadout() {
+  const airborne = useCarStore((s) => s.airborne)
+  const height = useCarStore((s) => (Number.isFinite(s.height) ? s.height.toFixed(1) : '—'))
+  const vertical = useCarStore((s) => s.verticalSpeed.toFixed(1))
+  const turns = useCarStore((s) => Math.abs(s.rollTurns).toFixed(1))
+  if (!airborne) return null
+  const rising = !vertical.startsWith('-')
+  return (
+    <dl className="hud-air">
+      <dt>Height</dt>
+      <dd>
+        {height}
+        <span className="hud-unit">m</span>
+      </dd>
+      <dt>Vertical</dt>
+      <dd>
+        {rising ? '↑' : '↓'} {vertical.replace('-', '')}
+        <span className="hud-unit">m/s</span>
+      </dd>
+      <dt>Roll</dt>
+      <dd>
+        {turns}
+        <span className="hud-unit">turns</span>
+      </dd>
+    </dl>
   )
 }
 
@@ -75,6 +114,7 @@ export default function Hud() {
         <Speed />
         <FuelBar />
         <FansMeter />
+        <AirReadout />
       </div>
       <RaceHud />
     </div>

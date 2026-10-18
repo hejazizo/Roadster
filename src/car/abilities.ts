@@ -5,7 +5,7 @@ import type { Assist } from './handling'
 import type { PhysicsWorld, QueryFlags, Ray } from './respawn'
 import type { CarControls } from './useCarControls'
 
-const { fuel, boost, hop, glide, airControl, landing, suction } = TUNING.car
+const { fuel, boost, hop, glide, airControl, landing, suction, jets } = TUNING.car
 
 export type VehicleController = ReturnType<
   ReturnType<typeof useRapier>['world']['createVehicleController']
@@ -32,6 +32,11 @@ export type AbilityState = {
   surfaceNormal: Vector3 // averaged wheel contact normal, valid while grounded
   hold: Hold
   parkedAt: Vector3 | null // where the fans parked the car on a wall or ceiling
+  lifting: boolean // the jets are pushing along the car's up
+  sinceLift: number // s since the jets last lifted
+  roll: number // -1…1, the roll jets: positive lifts the left side (air roll or auto-right)
+  autoRightDir: number // -1 / 1 while the assist rolls an inverted car upright, else 0
+  groundDistance: number // m straight down from the car's centre to solid ground (∞ if none)
 }
 
 export const createAbilityState = (): AbilityState => ({
@@ -49,6 +54,11 @@ export const createAbilityState = (): AbilityState => ({
   surfaceNormal: new Vector3(0, 1, 0),
   hold: 'none',
   parkedAt: null,
+  lifting: false,
+  sinceLift: Infinity,
+  roll: 0,
+  autoRightDir: 0,
+  groundDistance: Infinity,
 })
 
 // Frame-rate independent lerp factor for a damping rate.
@@ -58,14 +68,15 @@ const quat = new Quaternion()
 const quatInv = new Quaternion()
 const forward = new Vector3()
 const up = new Vector3()
-const left = new Vector3()
 const vel = new Vector3()
 const flatVel = new Vector3()
 const heading = new Vector3()
 const spin = new Vector3()
 const impulse = new Vector3()
 const level = new Vector3()
+const tiltAxis = new Vector3()
 const groundUp = new Vector3()
+const groundHit = { distance: Infinity, normal: new Vector3(0, 1, 0) }
 const WORLD_UP = new Vector3(0, 1, 0)
 // A surface whose normal points less up than this (cos 60°) is a wall; below its negative,
 // a ceiling.
@@ -82,8 +93,9 @@ export function resetAbilities(state: AbilityState, body: RapierRigidBody) {
   body.setGravityScale(1, true)
 }
 
-// Boost, hop, glide, air control and fuel for one physics step. Call after `updateVehicle`,
-// which refreshes the wheel contacts used for the grounded check.
+// Boost, hop, glide, jets, air control and fuel for one physics step. Call after
+// `updateVehicle`, which refreshes the wheel contacts used for the grounded check. `jetsOn`
+// is false on a level without the jets (Level.jets).
 export function stepAbilities(
   state: AbilityState,
   body: RapierRigidBody,
@@ -92,6 +104,7 @@ export function stepAbilities(
   dt: number,
   assist: Assist,
   probe: GroundProbe,
+  jetsOn = true,
 ) {
   const mass = body.mass()
   const r = body.rotation()
@@ -109,6 +122,8 @@ export function stepAbilities(
   state.sinceHop += dt
   state.landingAssist = Math.max(0, state.landingAssist - dt)
   stepSuction(state, body, vc, c, dt, assist)
+  probeGround(body, probe)
+  state.groundDistance = groundHit.distance
 
   // A press is kept for a moment until the car can hop (buffer), and the car can still hop
   // just after driving off an edge (coyote time).
@@ -157,10 +172,48 @@ export function stepAbilities(
     }
     body.setLinvel(vel, true)
   }
-  if (!grounded) steerInAir(body, c, dt, gliding ? 1 : airControl.plainFactor, assist, probe)
-  else if (state.landingAssist > 0) settleLanding(body, dt, assist)
 
-  if (grounded && !state.boosting && state.suction === 0) {
+  // After the glide, which sets the velocity: the jets push along the car's up (off the
+  // ground too, which is the lift-off), weaker the higher the ground below.
+  state.lifting = jetsOn && c.lift && state.fuel > 0
+  state.sinceLift = state.lifting ? 0 : state.sinceLift + dt
+  if (state.lifting) {
+    const g = -TUNING.world.gravity[1]
+    const k = MathUtils.clamp(
+      (state.groundDistance - jets.fullHeight) / (jets.fadeHeight - jets.fullHeight),
+      0,
+      1,
+    )
+    const lift = jets.liftG * MathUtils.lerp(1, jets.minFactor, k)
+    const rising = Math.max(0, body.linvel().y)
+    impulse
+      .copy(up)
+      .multiplyScalar(lift)
+      .addScaledVector(forward, jets.forwardG)
+      .multiplyScalar(g)
+      .addScaledVector(WORLD_UP, -jets.riseDrag * rising)
+      .multiplyScalar(mass * dt)
+    body.applyImpulse(impulse, true)
+    state.fuel -= jets.fuelPerSecond * dt
+  }
+
+  state.roll = 0
+  if (!grounded) {
+    state.roll = steerInAir(
+      state,
+      body,
+      c,
+      dt,
+      gliding ? 1 : airControl.plainFactor,
+      assist,
+      jetsOn,
+    )
+  } else {
+    state.autoRightDir = 0
+    if (state.landingAssist > 0) settleLanding(body, dt, assist)
+  }
+
+  if (grounded && !state.boosting && state.suction === 0 && !state.lifting) {
     state.fuel += fuel.rechargePerSecond * dt
   }
   state.fuel = MathUtils.clamp(state.fuel, 0, fuel.max)
@@ -253,51 +306,103 @@ function stepSuction(
   body.applyImpulse(impulse, true)
 }
 
-// The "up" the car levels to in the air: world up, blending to the normal of the ground
-// below as it comes within `groundProbe`, so it lands flat on a ramp.
-function levelNormal(body: RapierRigidBody, { world, ray, flags }: GroundProbe) {
-  level.copy(WORLD_UP)
+// The solid ground straight below the car's centre, within `jets.heightProbe`.
+function probeGround(body: RapierRigidBody, { world, ray, flags }: GroundProbe) {
   const p = body.translation()
   ray.origin = { x: p.x, y: p.y, z: p.z }
   ray.dir = { x: 0, y: -1, z: 0 }
-  const range = airControl.groundProbe
+  const range = jets.heightProbe
   const hit = world.castRayAndGetNormal(ray, range, true, flags, undefined, undefined, body)
-  if (hit && hit.normal.y > 0.5) {
-    const near = 1 - hit.timeOfImpact / range
-    level.lerp(groundUp.set(hit.normal.x, hit.normal.y, hit.normal.z), near).normalize()
+  groundHit.distance = hit ? hit.timeOfImpact : Infinity
+  if (hit) groundHit.normal.set(hit.normal.x, hit.normal.y, hit.normal.z)
+}
+
+// The "up" the car levels to in the air: world up, blending to the normal of the ground
+// below as it comes within `groundProbe`, so it lands flat on a ramp.
+function levelNormal() {
+  level.copy(WORLD_UP)
+  const range = airControl.groundProbe
+  if (groundHit.distance < range && groundHit.normal.y > 0.5) {
+    const near = 1 - groundHit.distance / range
+    level.lerp(groundUp.copy(groundHit.normal), near).normalize()
   }
   return level
 }
 
+// Seconds until a fall reaches the ground below (∞ with none, or while rising clear of it).
+function timeToImpact(state: AbilityState, body: RapierRigidBody) {
+  const g = -TUNING.world.gravity[1] * body.gravityScale()
+  const h = state.groundDistance
+  if (!Number.isFinite(h)) return Infinity
+  const down = -body.linvel().y
+  return (-down + Math.sqrt(Math.max(0, down * down + 2 * g * h))) / g
+}
+
 // Car-local axes: +X left, +Y up, +Z forward. Positive X spin dips the nose, positive
 // Y spin turns left, positive Z spin lifts the left side. `strength` scales the pitch and
-// bank angles and the yaw control (1 gliding, less while plainly airborne); levelling out
-// always runs, at the assist's rate.
+// bank angles and the yaw control (1 gliding, less while plainly airborne). Levelling holds
+// the car near upright, at the assist's rate, and lets go as it turns over, so it can fly
+// upside down; a roll released near a full turn levels the short way, so it ends upright.
+// Air roll (with the jets) takes the steer for roll spin instead of yaw and bank. Returns
+// the roll jets' command, -1…1.
 function steerInAir(
+  state: AbilityState,
   body: RapierRigidBody,
   c: CarControls,
   dt: number,
   strength: number,
   assist: Assist,
-  probe: GroundProbe,
+  jetsOn: boolean,
 ) {
-  const turn = -c.steer // positive turns left
-  left.set(1, 0, 0).applyQuaternion(quat)
-  const n = levelNormal(body, probe)
-  const pitch = -Math.asin(MathUtils.clamp(forward.dot(n), -1, 1)) // nose down is positive
-  const roll = Math.asin(MathUtils.clamp(left.dot(n), -1, 1)) // left side up is positive
+  const rolling = jetsOn && c.airRoll
+  const turn = rolling ? 0 : -c.steer // positive turns left
+  const n = levelNormal()
+  // The turn (car-local axis × angle) that brings the car's up onto the level's: its X part is
+  // the pitch back to level (nose down is negative), its Z part the roll (left side up is
+  // negative). Consistent at any attitude, unlike separate pitch and roll angles.
+  const tilt = Math.acos(MathUtils.clamp(up.dot(n), -1, 1))
+  quatInv.copy(quat).invert()
+  tiltAxis.crossVectors(up, n).applyQuaternion(quatInv)
+  if (tiltAxis.lengthSq() > 1e-12) tiltAxis.setLength(tilt)
+  const capture = 1 - MathUtils.smoothstep(tilt, jets.levelCapture, jets.levelRelease)
   const pitchTarget = c.pitch * airControl.pitchAngle * strength
   const bank = -turn * airControl.bankAngle * strength // left side down when turning left
-  const levelRate = airControl.levelRate * assist.airLevel
+  const levelRate = airControl.levelRate * assist.airLevel * capture
 
   const w = body.angvel()
-  quatInv.copy(quat).invert()
   spin.set(w.x, w.y, w.z).applyQuaternion(quatInv)
   const k = dampFactor(airControl.damping, dt)
-  spin.x += ((pitchTarget - pitch) * levelRate - spin.x) * k
+  spin.x += ((pitchTarget + tiltAxis.x) * levelRate - spin.x) * k
   spin.y += (turn * airControl.yawRate - spin.y) * dampFactor(airControl.damping * strength, dt)
-  spin.z += ((bank - roll) * levelRate - spin.z) * k
+
+  // Assist: an inverted car falling towards the ground is rolled upright, keeping to the way
+  // it started so it doesn't hunt at ±180°.
+  const righting =
+    jetsOn &&
+    !rolling &&
+    assist.autoRight > 0 &&
+    tilt > jets.levelCapture &&
+    timeToImpact(state, body) < jets.autoRightTime
+  if (!righting) state.autoRightDir = 0
+  else state.autoRightDir ||= tiltAxis.z >= 0 ? 1 : -1
+
+  let jet = 0
+  if (rolling) {
+    // Right steer rolls right (the left side up). Spin is kept when the steer is let go.
+    jet = c.steer
+  } else if (righting) {
+    jet = state.autoRightDir * assist.autoRight
+  }
+  if (rolling || righting) {
+    const max = jets.maxRollRate
+    const target = rolling ? spin.z + jet * jets.rollTorque * dt : jet * max
+    const step = jets.rollTorque * dt
+    spin.z = MathUtils.clamp(MathUtils.clamp(target, spin.z - step, spin.z + step), -max, max)
+  } else {
+    spin.z += ((bank + tiltAxis.z) * levelRate - spin.z) * k
+  }
   body.setAngvel(spin.applyQuaternion(quat), true)
+  return jet
 }
 
 // Just after a landing: damp roll and yaw spin so the car settles instead of bouncing round.

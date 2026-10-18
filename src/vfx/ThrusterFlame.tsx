@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, type RefObject } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
   Color,
@@ -11,22 +11,11 @@ import {
   type Group,
   type Sprite,
 } from 'three'
-import { TUNING } from '../config/tuning'
+import { FLAME, type PlumeStyle } from './plumes'
 import { useRaceStore } from '../state/raceStore'
 
-// Sized to the hero car's exhaust vents (radius about 0.07 m).
-const NOZZLE_RADIUS = 0.07
-// Colours above 1 are HDR, so the bloom picks them up.
-const OUTER_BASE = new Color(3, 1.1, 0.25)
-const OUTER_TIP = new Color(1.2, 0.15, 0.02)
-const CORE_BASE = new Color(4, 4, 5)
-const CORE_TIP = new Color(1.5, 1.3, 2.5)
 const CORE_SCALE = 0.55 // core width and length as a fraction of the outer flame
 const FLICKER = 0.12 // length wobble, as a fraction
-// A glow at the nozzle exit: the chase cam looks along the exhaust, where the cones are
-// seen end-on and thin, so this is what reads as the thruster from behind.
-const GLOW_COLOR = new Color(3, 1.3, 0.45)
-const GLOW_SIZE = 0.6 // m across at full thrust
 const GLOW_OFFSET = 0.08 // m behind the nozzle, clear of the bodywork
 
 // Unit cone along −Z: base (open) at the origin, tip at z = −1.
@@ -47,14 +36,15 @@ function glowTexture(size = 64) {
   return texture
 }
 
-// Shared by every nozzle; they all burn at the same thrust.
-const glowMaterial = new SpriteMaterial({
-  map: glowTexture(),
-  color: GLOW_COLOR,
-  blending: AdditiveBlending,
-  depthWrite: false,
-  transparent: true,
-})
+const glowMap = glowTexture()
+const glowMaterial = (color: Color) =>
+  new SpriteMaterial({
+    map: glowMap,
+    color,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    transparent: true,
+  })
 
 const vertexShader = /* glsl */ `
   varying float vT;
@@ -97,12 +87,13 @@ const wobble = (t: number) =>
   Math.sin(t * 31) * 0.5 + Math.sin(t * 53 + 1.7) * 0.3 + Math.sin(t * 97) * 0.2
 
 type ThrusterFlameProps = {
-  thrust: RefObject<number> // 0–1
+  thrust: () => number // 0–1
   seed: number // desynchronises the flicker of neighbouring nozzles
+  style?: PlumeStyle
 }
 
-// An exhaust flame along the nozzle's −Z: an orange outer cone around a white-hot core.
-export default function ThrusterFlame({ thrust, seed }: ThrusterFlameProps) {
+// An exhaust plume along the nozzle's −Z: an outer cone around a brighter core, and a glow.
+export default function ThrusterFlame({ thrust, seed, style = FLAME }: ThrusterFlameProps) {
   const group = useRef<Group>(null)
   const cones = useRef<Group>(null)
   const glow = useRef<Sprite>(null)
@@ -111,24 +102,25 @@ export default function ThrusterFlame({ thrust, seed }: ThrusterFlameProps) {
   const time = useRef(seed * 10)
   const materials = useMemo(
     () => ({
-      outer: flameMaterial(OUTER_BASE, OUTER_TIP),
-      core: flameMaterial(CORE_BASE, CORE_TIP),
+      outer: flameMaterial(style.outerBase, style.outerTip),
+      core: flameMaterial(style.coreBase, style.coreTip),
+      glow: glowMaterial(style.glow),
     }),
-    [],
+    [style],
   )
 
   useFrame((_, dt) => {
     const g = group.current
     if (!g || !cones.current || !glow.current) return
     if (!useRaceStore.getState().paused) time.current += dt
-    const t = thrust.current
+    const t = thrust()
     g.visible = t > 0.01
     if (!g.visible) return
     const flicker = 1 + FLICKER * wobble(time.current)
-    const radius = NOZZLE_RADIUS * (0.6 + 0.4 * t)
-    cones.current.scale.set(radius, radius, TUNING.vfx.flame.length * t * flicker)
+    const radius = style.radius * (0.6 + 0.4 * t)
+    cones.current.scale.set(radius, radius, style.length() * t * flicker)
     for (const m of [outer.current, core.current]) if (m) m.uniforms.uIntensity.value = t
-    glow.current.scale.setScalar(GLOW_SIZE * (0.4 + 0.6 * t) * flicker)
+    glow.current.scale.setScalar(style.glowSize * (0.4 + 0.6 * t) * flicker)
     glow.current.material.opacity = t
   })
 
@@ -142,7 +134,12 @@ export default function ThrusterFlame({ thrust, seed }: ThrusterFlameProps) {
           <primitive ref={core} object={materials.core} attach="material" />
         </mesh>
       </group>
-      <sprite ref={glow} material={glowMaterial} position={[0, 0, -GLOW_OFFSET]} renderOrder={2} />
+      <sprite
+        ref={glow}
+        material={materials.glow}
+        position={[0, 0, -GLOW_OFFSET]}
+        renderOrder={2}
+      />
     </group>
   )
 }

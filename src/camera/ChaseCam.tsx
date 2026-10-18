@@ -100,6 +100,7 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
       boostShake,
       shakeDecay,
       shakeOffset,
+      badLandingShake,
       surfaceAngleStart,
       surfaceAngleFull,
       upDamping,
@@ -215,7 +216,9 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     const s = shake.current
     const t = telemetry.current
     const { boosting } = useCarStore.getState()
-    if (t.landings !== s.landings) s.trauma += t.landingImpact * landingShake
+    if (t.landings !== s.landings) {
+      s.trauma += t.landingImpact * landingShake + (t.landingKind === 'bad' ? badLandingShake : 0)
+    }
     s.landings = t.landings
     const paused = useRaceStore.getState().paused
     if (!paused) {

@@ -25,6 +25,7 @@ Node names may only use letters, digits and `_`. three.js's GLTFLoader turns spa
 | ---------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr` | yes      | One wheel each (front/rear, left/right), **root-level** (direct children of the scene).                              |
 | `thruster_*`                                   | no       | Empty nodes marking exhaust nozzles, any number (`thruster_left`, `thruster_right`, …). Can be anywhere in the tree. |
+| `jet_under_*`, `jet_left_*`, `jet_right_*`     | no       | Empty nodes marking cold-gas jet nozzles: under the floor (lift) and low on each side (roll). See [Jets](#jets).     |
 | everything else                                | —        | Bodywork, rendered as one rigid piece that moves with the chassis. Call the top node `body` by convention.           |
 
 ### Materials
@@ -61,6 +62,12 @@ The code ignores the authored position and uses the physics position. That is th
 - Each `thruster_*` empty sits at a nozzle's exit, with its **−Z axis pointing along the exhaust** (backwards on a rear nozzle, so normally no rotation).
 - While boosting or gliding, an exhaust flame (two additive cones and a glow sprite, `src/vfx/ThrusterFlame.tsx`) is drawn along each one's −Z, with embers and heat trailing from it. The flame is sized for nozzles about 0.07 m in radius.
 
+### Jets
+
+- Each `jet_*` empty sits at a cold-gas nozzle's exit with its **−Z axis pointing along the exhaust**, like a thruster: straight down for the `jet_under_*` nozzles (lift), outwards for `jet_left_*` and `jet_right_*` (roll).
+- While lifting, the `jet_under_*` nozzles draw a pale cold-gas plume (`COLD_GAS` in `src/vfx/ThrusterFlame.tsx`, sized for nozzles about 0.05 m in radius) and trail white vapour. While the car rolls, one side's pair fires. They sit low on the sills, below the centre of mass, so blowing outwards rolls the car towards that side: `jet_right_*` fire when the left side lifts, `jet_left_*` when the right side does.
+- The jets push the physics body whether or not a model has them; without the nodes there's just no plume.
+
 ## Checks
 
 In `npm run dev`, `src/car/CarModel.tsx` warns in the browser console when:
@@ -89,6 +96,7 @@ Targets, so the car doesn't dominate the frame budget:
   - closes the opened front arches with dark liners (a cylinder plus an inner disc, clear of the steered wheel);
   - scales the body uniformly so the wheelbase matches the physics, with its ground line on the ground with the car resting on its suspension (the static sag is measured by settling the car in Rapier, `scripts/car-model-targets.ts`);
   - adds `thruster_left`/`thruster_right` at the two outer exhaust vents in the rear diffuser;
+  - adds eight `jet_*` empties: four under the floor between the wheels blowing down, and two low on each sill blowing outwards;
   - simplifies the body to ~95k triangles and the wheel to ~11k (139k drawn in all);
   - sorts the simplified triangles into materials by the texel under each triangle (the texture ships in the emissive slot, unlit; the new materials use it as base colour) and the triangle's position in source units, with thresholds measured on rendered views of the source:
     - **`tail_light`**: the red strip across the rear, emissive from the texture itself;

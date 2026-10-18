@@ -100,9 +100,41 @@
   background: #9b5de5;
 }
 
+.hud-status.is-overturned {
+  background: #6c757d;
+}
+
 .hud-status.is-wall,
 .hud-status.is-ceiling {
   background: #e63946;
+}
+
+.hud-status.is-jets {
+  background: #adb5bd;
+  color: #0f141e;
+}
+
+.hud-air {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-air dt {
+  align-self: center;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.hud-air dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
 }
 
 .race-panel {

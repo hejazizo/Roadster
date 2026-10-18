@@ -35,7 +35,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 15   | Handling & flight polish       | 3 · Details | ☑      |
 | 16.1 | Reveal: proving-ground greybox | 3 · Details | ☑      |
 | 16.2 | Reveal: suction & half-loop    | 3 · Details | ☑      |
-| 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☐      |
+| 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☑      |
 | 16.4 | Reveal: fleet jump             | 3 · Details | ☐      |
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☐      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☐      |
@@ -452,6 +452,58 @@ Headless Chrome, 17 checks:
 
 **Done when:** you can drop off the half-loop's lip upside down, roll upright with the jets, slow the fall and land cleanly on all four wheels.
 
+✅ **Done:** lift on G / pad RB (`lift`), air roll on E / pad X (`airRoll`, the handbrake's button, which does nothing in the air) plus steer. Both work on both levels (`Level.jets`, on unless false); values are in `TUNING.car.jets`.
+
+- **Lift:** up to 2.7 g along the car's up, plus 0.3 g forward, at 0.4 fuel/s (2.5 s on a full tank, from the shared bar).
+  - **Ground effect:** the push is full within 3 m of the ground below (probed 50 m straight down) and fades to nothing by 12 m, or over a void.
+  - **Rise drag:** 1.5 /s while climbing under lift, so it settles at a hover instead of bobbing.
+  - So the jets lift off, carry the car a few metres up and brake a fall's last metres. They can't hold it high or replace the glide over the Test Track's void, which is why its gaps didn't need resizing. A 1 s burst from a standstill peaks at 7.7 m.
+- **Air roll:** steer adds 14 rad/s² of roll spin, capped at 5 rad/s, and the spin is kept when the steer is let go.
+- **Air levelling:**
+  - Its error is now the turn that brings the car's up onto the level normal (`up × n` in car axes), which matches the old pitch and roll angles near upright and stays consistent upside down.
+  - It holds the car within 80° of upright and lets go by 115°, so an inverted car keeps its attitude, and a roll let go past ¾ turn finishes the full turn.
+  - Beginner (`assists.*.autoRight`) rolls an inverted car upright once it's within 1.4 s of hitting the ground.
+- **Landings** (`telemetry.ts`):
+  - a car touches the ground by a wheel or by the chassis resting on a floor-like surface (Rapier contact manifolds), and air time counts from the last touch;
+  - each landing has a kind: `bad` (roof or side, up · n < 0.5, or faster than 14 m/s into the surface), `clean` (on the wheels with lift in the last 0.4 s) or `wheels`;
+  - clean and bad landings always count, even soft ones; a bad one adds camera shake (`badLandingShake`) and full rumble, with no respawn;
+  - telemetry also has the roll turns since take-off, the height of the hanging wheels above the ground and the vertical speed.
+- **VFX:** eight `jet_*` empties in `scripts/build-car-model.ts`: four under the floor blowing down, and two low on each sill blowing outwards. `docs/car-model-spec.md` has a _Jets_ section; `car.glb` is still 1.76 MB and the same bytes in Docker.
+  - The plume style moved to `src/vfx/plumes.ts` (the boost `FLAME` and a pale `COLD_GAS`), drawn by `ThrusterFlame` at each jet nozzle and scaled by smoothed jet levels (`TUNING.vfx.jets`).
+  - White vapour trails from firing jets, and a vapour cloud rolls out on a clean landing.
+- **Audio:** a high band-passed hiss follows lift (roll jets at 40%), and `sfx.jetBurst` plays on lift-off.
+- **HUD:** a Jets pill while lifting, an Overturned pill on the roof or side, and while airborne a readout of height, vertical speed and roll turns. The fuel bar shows draining under lift. New tuning-panel folders: _Jets_, _Jets FX_, _Jet sound_.
+
+Sim (`npm run sim:car`), both modes, all checks pass. The pad driving and every Test Track check match HEAD; new checks:
+
+- **Jets on the pad:** a standstill lift-off climbs at 4.0 m/s after 0.3 s. Holds of 0.25 / 0.5 / 2 s peak at 1.1 / 3.5 / 9.4 m.
+- **Air roll:**
+  - stopped at ¾ turn and let go: lands upright after 0.95–1.03 turns;
+  - at ¼ turn: rolls back;
+  - stopped inverted: Pro lands on its roof (bad), Beginner is rolled upright.
+- **Half-loop drop** (fans, 2 s hold, drive off, roll, lift):
+  - from 25 m/s: clean at 4.3–6.1 m/s with 0.46 fuel at the lip;
+  - from 22 m/s: clean but firm, 12–13 m/s;
+  - from 20 m/s the car parks short of the top and crawls to the lip under the fans, arriving with 0.03 fuel, too little to brake: a bad landing;
+  - doing nothing: Pro lands on its roof, and Beginner auto-rights but lands too hard (18 m/s, bad).
+- **Test Track with jets** (jets on, so lift has to be no shortcut):
+  - hop + lift held falls short of the 80 m gap at every speed, and misses the void ring;
+  - lift-off at the edge + glide lands 87–91 m past the edge, against 79–116 for hop + glide;
+  - kicker landings stay `wheels` at 9.7–10 m/s.
+- **Half-loop, no fans, 16 m/s:** the car now ends on the loop's foot on its roof, where it used to be turned upright; R recovers it, so "back on the pad" now allows the foot.
+
+Headless Chrome, 13 checks:
+
+- eight jet nozzles found;
+- lift-off by G and by pad RB, with the Jets pill, air readout and four plumes;
+- jet hiss up to gain 0.3;
+- an E + D roll let go past ¾ turn lands upright at 1.04 turns, with the side plumes firing;
+- pad X + stick rolls;
+- a scripted Beginner lip drop from 25 m/s lands clean and upright, with a vapour cloud;
+- a Pro drop doing nothing lands on its roof and stays there; R recovers it;
+- 60 fps, 73 draw calls at spawn and 85 with the jets firing;
+- no page errors or car-model warnings.
+
 ### M16.4 — Reveal: fleet jump
 
 - **Kickflip feel:** tune lift, forward push and roll for a jump from the flat straight with no ramp. It lifts off, carries forward over ~31 m of parked cars, does one full roll, and lands upright beyond the row. A full tank allows one jump with some margin, not two in a row.
@@ -555,9 +607,14 @@ Park later ideas here instead of building them early.
   - parked cars you can knock over.
 - Half-loop trimesh: without `FIX_INTERNAL_EDGES` a scraping chassis stops dead; keep the flag on any future trimesh pieces. M16.2's bump stop keeps the chassis off the loop at every speed, but at 45 m/s the springs still reach the end of their travel.
 - Half-loop (M16.2):
-  - A car dropping off the lip nose-first is turned upright by the M3/M15 air auto-level before it lands, often on its wheels; M16.3 replaces that with the roll.
   - Parked under the top, the camera looks up the ceiling towards the lip and mostly sees sky; a lower look target on ceilings could show more of the drop.
   - Climbing from a crawl needs boost the whole way and empties the tank by the end of a 3 s hold; M16.5 scoring should allow for that (or the separate air tank from the reveal ideas).
 - A safe point can be recorded on the first metres of the loop's clothoid entry (it's level within `flatTolerance`), so R after a loop attempt can put the car at the ramp's foot facing it. Harmless so far; tighten the probe if it bites.
 - The bump stop also acts on the Test Track kickers' faces: launches moved 1–2.5 m. Every ring and gap check still passes.
 - Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's south straight, east of spawn.
+- Jets (M16.3):
+  - **Shared fuel is tight for the drop.** A 25 m/s approach reaches the lip with 0.46 fuel and lands with ~0.1; slower approaches park short of the top and crawl, and arrive empty. M16.4 balances fuel for the fleet jump; M16.5 scoring may want the separate air tank from the reveal ideas.
+  - `clean` covers any wheel landing under lift up to the 14 m/s bad threshold, so a firm one counts; M16.5 scoring could grade softness.
+  - The roll jets are visual: the roll is a torque on the body, with no side force.
+  - Lift fades to nothing by 12 m above the ground and over voids (ground effect); if a later level needs the jets high up, give it its own floor or raise `fadeHeight`.
+  - The first physics step's ground probe can't hit anything (the query structures aren't built yet), so height reads ∞ for one step; the HUD shows "—".
