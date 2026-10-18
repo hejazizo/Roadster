@@ -297,3 +297,48 @@
 .menu-slider input:focus {
   outline: none;
 }
+
+.menu-medal {
+  padding: 3px 10px;
+  border-radius: 10px;
+  color: #111111;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-medal.is-gold {
+  background: #ffd60a;
+}
+
+.menu-medal.is-silver {
+  background: #d0d6de;
+}
+
+.menu-medal.is-bronze {
+  background: #d8955a;
+}
+
+.menu-breakdown {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-breakdown th {
+  padding: 2px 0;
+  font-weight: 500;
+  text-align: left;
+  opacity: 0.8;
+}
+
+.menu-breakdown td {
+  padding: 2px 0 2px 10px;
+  text-align: right;
+}
+
+.menu-breakdown tr.is-penalty td:last-child {
+  color: #ff8a80;
+}

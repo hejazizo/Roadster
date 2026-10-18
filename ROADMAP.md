@@ -37,7 +37,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.2 | Reveal: suction & half-loop    | 3 · Details | ☑      |
 | 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☑      |
 | 16.4 | Reveal: fleet jump             | 3 · Details | ☑      |
-| 16.5 | Reveal: stunt run mode         | 3 · Details | ☐      |
+| 16.5 | Reveal: stunt run mode         | 3 · Details | ☑      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☐      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
@@ -575,6 +575,39 @@ Headless Chrome, 9 checks:
 
 **Done when:** a full reveal run can be played start to finish with a score, and replayed for a better one without reloading.
 
+✅ **Done:** decided at the start of the milestone: a failed stunt costs points and the run goes on (only falling off the loop before the hold sends it back to the half-loop step), and the run has its own start on the half-loop's run-up and a finish gate ~60 m past the fleet.
+
+- **Mode:** _Ring time trial / Reveal run_ on the main menu, shown only on a level with `Level.stunts` (the Proving Ground): N, pad LB (the fans' button, which does nothing on a menu) or click. Saved in localStorage (`src/state/modeStore.ts`, junk or blocked storage falls back to the time trial). Changing it bumps `runId`, so the car moves to the mode's spawn (`stunts.spawn`, lined up on the loop at z 25).
+- **Steps** (`src/state/stuntRun.ts`, pure, so the sim runs the same code): a stepper reads the car's telemetry (now with `hold`) and pose after every physics step (`Race.tsx`, `useAfterPhysicsStep`):
+  1. _Half-loop_: on the ceiling;
+  2. _Inverted hold_: 2 s unbroken on the ceiling; the hold keeps counting (up to 6 s) until the car lets go;
+  3. _Drop & roll_: off the ceiling, then upright in the air (a Beginner auto-right counts);
+  4. _Clean landing_: the first touch back on the pad: `clean` scores, `wheels` passes, `bad` (or R mid-drop) is a penalty, and the run goes on. The worst landing since the car left the ceiling counts, and touching the pad overturned is bad, so a bounce off the loop's foot before the last touch can't hide a roof landing (a scripted Pro drop caught this);
+  5. _Fleet jump_: in the air over the row's footprint (padded 1 m), then touching down beyond its far end; landing short or beside it, or driving round, leaves the step open;
+  6. _Finish line_: the gate's sensor.
+  - Coming back to the pad before the hold is done (sliding off, riding over the top at speed, R) is _Fell off the loop_: a penalty and back to step 1.
+- **Score** (`TUNING.reveal`, a tuning-panel folder): 3,000 − 25/s for time, 250/s of hold (≥ 2 s counts, capped at 6 s), 500 per roll turn (the drop and the kickflip), 1,000 per clean landing, 1,500 for no contact; −1,000 per bad landing, −500 per hit (at most 4 count, which caps the 0.3 s re-hit note from M16.4), −500 per fall off the loop. Never below 0. Medals per assist mode: Beginner 4,000 / 6,000 / 7,500, Pro 3,500 / 5,500 / 7,000.
+- **Bests:** `bestTimes.ts` also keeps scores under `roadster.bestScore.<level>.<mode>.<assist>` (junk, negative, fractional or empty values ignored). A run that has Beginner on at any point is scored and saved as Beginner, so switching on the pause menu can't post a Pro score.
+- **UI:** an objective banner under the timer ("Step 2 / 6 · Inverted hold" and a hint with the device's key labels, a bar towards the 2 s hold), a running points total in place of the ring count, popups for each step, bonus and penalty that fade out on their own, and a results screen with the score, medal, breakdown, best or "New best!" and Retry / Menu. The main menu's subtitle and Best line follow the mode (best score and medal for the chosen assist mode).
+- **Audio:** `sfx.stunt(step)` is the ring chime with a third added, climbing per step; `sfx.stuntFail()` a low falling pair for a fall or a bad landing. Hits keep `sfx.hit`, and the finish is `sfx.finish`.
+
+Sim (`npm run sim:car`), both modes, all checks pass, and every other check's numbers match HEAD:
+
+- a scripted run from the stunt spawn (25 m/s run-up, fans, 2.5 s parked, the M16.3 drop, round to the fleet lane, the 20 m/s kickflip, the gate) does every step with no hits in 36.3 s and scores ~7,550 (Beginner 7,540, Pro 7,558);
+- riding over the top at 25 m/s with no fans falls off the loop (−500, back to step 1);
+- dropping off the lip doing nothing: Pro lands on its roof (bad, −1,000) and goes on to the fleet; Beginner's auto-righted landing is too hard (bad) and goes on too;
+- the kickflip from rest completes the fleet step (1.03 turns, clean); 1.2 s of lift clips a car (−500).
+
+Headless Chrome (CDP from a scratch script, against the dev server), 27 checks:
+
+- the mode picker by N, click and a scripted pad LB, with no focus taken; it persists, junk and blocked storage fall back, and it's hidden on the Test Track (which plays the time trial; N does nothing there);
+- a key-driven Beginner run does every step (42.6 s, 7,208, silver), the banner showed all six steps and the hold bar, and the results breakdown has its eight lines and "New best!";
+- the best score is saved under its key, shows with its medal after a reload, and junk values are ignored; Retry replays from step 1 on the same page;
+- the failure paths: riding over the top (−500, back to step 1), Pro dropping doing nothing (on its roof, −1,000, on to the fleet), then R and driving into the sedan (−500, the step stays open);
+- a Pro run switched to Beginner mid-run is scored as Beginner; a Pro run (fans held) completes and saves under Pro, and the menu's best follows the assist mode;
+- the time trial still shows its rings and best time, with no banner;
+- 60 fps and 67 draw calls at the stunt spawn; no page errors.
+
 ### M16.6 — Reveal: night facility art
 
 The old "real level art" milestone, now for the Proving Ground. Keep the collision shapes as they are; art is a visual layer on top. The Test Track stays greybox.
@@ -659,19 +692,23 @@ Park later ideas here instead of building them early.
 - Half-loop trimesh: without `FIX_INTERNAL_EDGES` a scraping chassis stops dead; keep the flag on any future trimesh pieces. M16.2's bump stop keeps the chassis off the loop at every speed, but at 45 m/s the springs still reach the end of their travel.
 - Half-loop (M16.2):
   - Parked under the top, the camera looks up the ceiling towards the lip and mostly sees sky; a lower look target on ceilings could show more of the drop.
-  - Climbing from a crawl needs boost the whole way and empties the tank by the end of a 3 s hold; M16.5 scoring should allow for that (or the separate air tank from the reveal ideas).
-- A safe point can be recorded on the first metres of the loop's clothoid entry (it's level within `flatTolerance`), so R after a loop attempt can put the car at the ramp's foot facing it. Harmless so far; tighten the probe if it bites.
+  - Climbing from a crawl needs boost the whole way and empties the tank by the end of a 3 s hold. M16.5 scores the hold (250/s) far above the time it costs (25/s) and caps it at 6 s, so the tank is the limit; the separate air tank is still in the reveal ideas.
+- A safe point can be recorded on the first metres of the loop's clothoid entry (it's level within `flatTolerance`), so R after a loop attempt can put the car at the ramp's foot facing it. In the reveal run that's where R lands after a bad drop; a scripted driver that steered hard from there at once climbed the side lip and tipped onto its side (backing off first is fine). Tighten the probe if players hit it.
 - The bump stop also acts on the Test Track kickers' faces: launches moved 1–2.5 m. Every ring and gap check still passes.
 - Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's west straight (M16.4), away from spawn.
 - Jets (M16.3):
-  - **Shared fuel is tight for the drop.** A 25 m/s approach reaches the lip with 0.46 fuel and lands with ~0.15 (M16.4's cheaper lift); slower approaches park short of the top and crawl, and arrive empty. M16.5 scoring may want the separate air tank from the reveal ideas.
-  - `clean` covers any wheel landing under lift up to the 14 m/s bad threshold, so a firm one counts; M16.5 scoring could grade softness.
+  - **Shared fuel is tight for the drop.** A 25 m/s approach reaches the lip with 0.46 fuel and lands with ~0.15 (M16.4's cheaper lift); slower approaches park short of the top and crawl, and arrive empty. The reveal run (M16.5) lives with it: the ground recharge refills the tank on the drive to the fleet.
+  - `clean` covers any wheel landing under lift up to the 14 m/s bad threshold, so a firm one counts; the reveal run scores any clean landing the same. Grading softness (points by landing speed) is left for later.
   - The roll jets are visual: the roll is a torque on the body, with no side force.
   - Lift fades to nothing by 12 m above the ground and over voids (ground effect); if a later level needs the jets high up, give it its own floor or raise `fadeHeight`.
 - Fleet jump (M16.4):
   - The jets push off the parked cars' roofs (the ground probe hits them), which is part of what carries a standstill lift-off over the row. A probe that ignored the fleet would need a stronger forward push.
   - The forward push is 1.2 g near the ground, as strong as boost; a lift-off is also a quick way to gain speed on flat ground, at the cost of fuel.
-  - `hitImpact` comes from the car's speed, not the speed into the contact, and holding the throttle against a parked car counts a new hit after every 0.3 s bounce; M16.5 scoring may want a severity or a cap per run.
+  - `hitImpact` comes from the car's speed, not the speed into the contact, and holding the throttle against a parked car counts a new hit after every 0.3 s bounce. The reveal run counts at most 4 hits per run; a severity per hit is still open.
   - The fleet models are one vertex-coloured material each: no emissive lamps or glossy glass yet (M16.6), and the semi's cab is a plain box from behind.
-  - The sim's kickflip driver times its roll by lift time (from rest) or wheel height (from a run-up); the window is narrow on purpose (1.2 s clips, 1.4 s clears), so a Beginner aid (e.g. a lift hint on the HUD) may help in M16.5.
+  - The sim's kickflip driver times its roll by lift time (from rest) or wheel height (from a run-up); the window is narrow on purpose (1.2 s clips, 1.4 s clears). The reveal banner only says when to lift and roll; a Beginner aid that shows the timing (a lift gauge, or a height mark to roll at) is still open.
   - The first physics step's ground probe can't hit anything (the query structures aren't built yet), so height reads ∞ for one step; the HUD shows "—".
+- Reveal run (M16.5):
+  - The fleet step needs the car's centre within the row's width + 1 m while in the air, so a jump just beside the row doesn't count; if that reads as unfair in play, widen `TUNING.reveal.rowMargin`.
+  - Popups and stings play for every step, but the stings and the fail pair weren't heard here: headless key presses don't count as a user gesture, so audio never started in the checks. Give them a listening pass with the mix (M19).
+  - Medals were set from scripted runs (the sim's 36 s bot scores ~7,550; the headless key-driven run 42–43 s, ~7,200). Re-tune them after a playtest.

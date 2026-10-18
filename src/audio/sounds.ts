@@ -142,6 +142,34 @@ export const sfx = {
       })
     }),
 
+  // Reveal-run step done: the ring chime with a third between, climbing with each step.
+  stunt: (step: number) =>
+    play((a, out, at) => {
+      const note = 72 + PENTATONIC[(step * 2) % PENTATONIC.length]
+      const level = mix.race
+      ;[note, note + 4, note + 7].forEach((n, i) => {
+        const t = at + i * 0.06
+        tone(a, out, { at: t, type: 'triangle', freq: midiToHz(n), decay: 0.4, gain: 0.26 * level })
+        tone(a, out, { at: t, freq: midiToHz(n + 12), decay: 0.22, gain: 0.08 * level })
+      })
+    }),
+
+  // Reveal-run penalty (off the loop, a bad landing): a low falling pair.
+  stuntFail: () =>
+    play((a, out, at) => {
+      const level = mix.race
+      ;[58, 53].forEach((n, i) => {
+        tone(a, out, {
+          at: at + i * 0.14,
+          type: 'square',
+          freq: midiToHz(n),
+          decay: 0.3,
+          gain: 0.16 * level,
+          filter: { type: 'lowpass', freq: 1800 },
+        })
+      })
+    }),
+
   // Finish: a rising arpeggio, carried on higher with a sparkle for a new best.
   finish: (newBest: boolean) =>
     play((a, out, at) => {

@@ -32,6 +32,10 @@ export type Loop = {
 // A checkpoint ring standing upright at `center`, its hole facing along `yaw`.
 export type Ring = { center: Vec3; yaw: number; radius: number }
 
+// The reveal run (M16.5): its own start, lined up on the half-loop's run-up, and a finish gate
+// past the parked fleet. The stunts themselves are the level's first loop and its fleet.
+export type Stunts = { spawn: { position: Vec3; yaw: number }; finish: Ring }
+
 export type Level = {
   id: string // stable key for saved best times and the level choice
   surface: 'grass' | 'asphalt' // greybox colours only, for now
@@ -45,6 +49,7 @@ export type Level = {
   road: { points: [number, number][]; width: number } // closed circuit, visual only
   rings: Ring[] // time-trial checkpoints in order; the last one is the start/finish arch
   jets?: boolean // the car's cold-gas jets (lift and air roll) work here; on unless false
+  stunts?: Stunts // the level offers the reveal run
 }
 
 export const NORTH = Math.PI

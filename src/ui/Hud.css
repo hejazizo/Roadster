@@ -176,3 +176,75 @@
   font-weight: 800;
   white-space: nowrap;
 }
+
+.race-objective {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  text-align: center;
+}
+
+.race-objective-step {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.race-objective-hint {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.race-objective-hold {
+  width: 160px;
+  margin-top: 3px;
+}
+
+.race-popups {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.race-popup {
+  font-size: 22px;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: race-popup 1.8s ease-out forwards;
+}
+
+.race-popup.is-bonus .race-popup-points {
+  color: #ffd60a;
+}
+
+.race-popup.is-penalty,
+.race-popup.is-hit {
+  color: #ff8a80;
+}
+
+@keyframes race-popup {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}

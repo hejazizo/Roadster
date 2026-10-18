@@ -16,7 +16,7 @@ Docker (only Docker needed on the host):
 - `make shell` — bash inside the container; `make clean` — remove image and volumes
 - `make car-model` — rebuild `public/models/car.glb` from the source model (see `docs/car-model-spec.md`)
 - `make fleet-models` — rebuild `public/models/fleet/*.glb`, the Proving Ground's parked cars, built in code from `src/scene/fleetData.ts`
-- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip) and the fleet jump (kickflip, hits) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
+- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip), the fleet jump (kickflip, hits) and the reveal run's steps and scoring (`src/state/stuntRun.ts`) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
 
 The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
 

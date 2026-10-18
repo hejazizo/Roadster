@@ -28,6 +28,9 @@ const { createAbilityState, stepAbilities } = await import('../src/car/abilities
 const { createDrivingState, stepDriving } = await import('../src/car/handling.ts')
 const { createTelemetry, stepTelemetry } = await import('../src/car/telemetry.ts')
 const { released } = await import('../src/car/useCarControls.ts')
+const { STUNT_STEPS, createStuntRun, finishStuntRun, scoreStuntRun, stepStuntRun } =
+  await import('../src/state/stuntRun.ts')
+type StuntRun = import('../src/state/stuntRun.ts').StuntRun
 type CarControls = import('../src/car/useCarControls.ts').CarControls
 type Assist = import('../src/car/handling.ts').Assist
 type Vec3 = [number, number, number]
@@ -52,9 +55,10 @@ function createWorld(ground: Ground) {
   world.timestep = DT
   const rings: InstanceType<typeof RAPIER.Collider>[] = []
   const loops: InstanceType<typeof RAPIER.Collider>[] = []
+  let finish: InstanceType<typeof RAPIER.Collider> | null = null
   if (ground === 'pad') {
     world.createCollider(RAPIER.ColliderDesc.cuboid(2000, 1, 2000).setTranslation(0, -1, 0))
-    return { world, rings, loops }
+    return { world, rings, loops, finish }
   }
   const level = ground
   const cuboid = ({ center, size }: Box) =>
@@ -88,20 +92,21 @@ function createWorld(ground: Ground) {
     )
   }
   // As Race.tsx: an upright cylinder sensor turned to face along the ring's yaw.
-  for (const { center, yaw, radius } of level.rings) {
+  const ringSensor = ({ center, yaw, radius }: Level['rings'][number]) => {
     const q = yawQuat(yaw).multiply(
       new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2),
     )
-    rings.push(
-      world.createCollider(
-        RAPIER.ColliderDesc.cylinder(TUNING.race.ringDepth / 2, radius)
-          .setSensor(true)
-          .setTranslation(...center)
-          .setRotation(q),
-      ),
+    return world.createCollider(
+      RAPIER.ColliderDesc.cylinder(TUNING.race.ringDepth / 2, radius)
+        .setSensor(true)
+        .setTranslation(...center)
+        .setRotation(q),
     )
   }
-  return { world, rings, loops }
+  for (const ring of level.rings) rings.push(ringSensor(ring))
+  // The reveal run's finish gate.
+  if (level.stunts) finish = ringSensor(level.stunts.finish)
+  return { world, rings, loops, finish }
 }
 
 // ---------------------------------------------------------------- the car
@@ -120,7 +125,7 @@ function createSim(
   speed = 0,
   assistOverride: Partial<Assist> = {},
 ) {
-  const { world, rings, loops } = createWorld(ground)
+  const { world, rings, loops, finish } = createWorld(ground)
   const rot = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw)
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
@@ -164,6 +169,7 @@ function createSim(
     body,
     collider,
     rings,
+    finish,
     vc,
     driving,
     abilities,
@@ -917,7 +923,12 @@ function fleetSpan(level: Level) {
 
 type JumpStart = 'standing' | number
 
-type JumpOptions = { rollHeight?: number; rollAfter?: number; liftAt?: number }
+type JumpOptions = {
+  rollHeight?: number
+  rollAfter?: number
+  liftAt?: number
+  watch?: (sim: Sim) => void // called after every step
+}
 
 // The kickflip over the fleet as a player flies it: lift off (from rest just behind the row,
 // or from a run-up at `start` m/s, lifting `liftAt` m before the sedan's tail), let go of lift
@@ -969,6 +980,7 @@ function fleetJumpRun(level: Level, start: JumpStart, options: JumpOptions = {})
   while (sim.time < 13 && !landing) {
     const { p } = pose(sim)
     sim.step(pilot(sim))
+    options.watch?.(sim)
     if (sim.abilities.lifting) liftTime += DT
     airborne ||= !sim.telemetry.touching
     if (p.z < span.semiTail && p.z > span.nose) minOverSemi = Math.min(minOverSemi, p.y)
@@ -984,7 +996,10 @@ function fleetJumpRun(level: Level, start: JumpStart, options: JumpOptions = {})
     landings = sim.telemetry.landings
   }
   // Let it settle.
-  for (let i = 0; i < 120; i++) sim.step(drive({ throttle: -0.3 }))
+  for (let i = 0; i < 120; i++) {
+    sim.step(drive({ throttle: -0.3 }))
+    options.watch?.(sim)
+  }
   const result = {
     hits: sim.telemetry.hits,
     landing,
@@ -1091,6 +1106,156 @@ function fleet(level: Level) {
   )
 }
 
+// ---------------------------------------------------------------- the reveal run
+
+// Steps a stunt run (src/state/stuntRun.ts) from the sim's car, as Race.tsx does in the game.
+function stuntWatcher(level: Level, run: StuntRun = createStuntRun()) {
+  const events: string[] = []
+  const watch = (sim: Sim) => {
+    const { p, up } = pose(sim)
+    const pose4 = { x: p.x, y: p.y, z: p.z, upY: up.y }
+    for (const e of stepStuntRun(run, sim.telemetry, pose4, level, DT)) {
+      events.push(e.points ? `${e.label} ${e.points > 0 ? '+' : ''}${e.points}` : e.label)
+    }
+  }
+  return { run, events, watch }
+}
+
+// The whole reveal run as a player flies it, from the stunt spawn: a 25 m/s run-up, fans and
+// a 2.5 s hold under the top, the drop flown as in M16.3, then round to the fleet lane for the
+// 20 m/s kickflip, and on through the finish gate.
+function revealPilotRun(level: Level) {
+  const { spawn, finish } = level.stunts!
+  const loop = level.loops[0]
+  const span = fleetSpan(level)
+  const sim = createSim(level, [spawn.position[0], REST, spawn.position[2]], spawn.yaw)
+  const stunts = stuntWatcher(level)
+  let landings = 0
+  let leftLip = false
+  const fans = fansDriver(2.5, (s) => {
+    if (!leftLip) {
+      leftLip = true
+      landings = s.telemetry.landings
+    }
+    return dropDriver(s)
+  })
+  // Waypoints from the drop's landing round to the fleet lane's run-up.
+  const waypoints: [number, number][] = [
+    [-20, -40],
+    [span.x, -60],
+  ]
+  const jump = jumpPilot(span, 20, { rollHeight: 3 })
+  let phase: 'runUp' | 'loop' | 'round' | 'jump' | 'finish' = 'runUp'
+  let flying = false
+  let finished = false
+  while (sim.time < 120 && !finished) {
+    const { p, flatSpeed } = pose(sim)
+    const t = sim.telemetry
+    if (phase === 'runUp' && p.y > 1.5) phase = 'loop'
+    if (phase === 'loop' && leftLip && t.touching && p.y < 1.5 && t.landings !== landings) {
+      phase = 'round'
+    }
+    if (phase === 'round' && waypoints.length === 0) phase = 'jump'
+    if (phase === 'jump') {
+      flying ||= !t.touching
+      if (flying && t.touching && p.z < span.nose) phase = 'finish'
+    }
+    let c: CarControls
+    if (phase === 'runUp') {
+      c = pursue(sim, loop.start[0], loop.start[2] - 10, 25)
+      c = { ...c, boost: flatSpeed < 24 }
+    } else if (phase === 'loop') c = fans.onRamp(sim)
+    else if (phase === 'round') {
+      const [x, z] = waypoints[0]
+      if (Math.hypot(x - p.x, z - p.z) < 8) waypoints.shift()
+      c = pursue(sim, x, z, 20)
+    } else if (phase === 'jump') c = jump(sim)
+    else c = pursue(sim, finish.center[0], finish.center[2] - 20, 20)
+    sim.step(c)
+    stunts.watch(sim)
+    if (sim.finish && sim.world.intersectionPair(sim.collider, sim.finish)) {
+      finished = finishStuntRun(stunts.run)
+    }
+  }
+  const result = {
+    ...stunts,
+    phase,
+    finished,
+    time: sim.time,
+    score: scoreStuntRun(stunts.run, sim.time, mode),
+  }
+  sim.free()
+  return result
+}
+
+const stepsLine = (run: StuntRun) =>
+  STUNT_STEPS.map((name, i) => `${name}: ${run.outcomes[i]}`).join(', ')
+
+function revealRun(level: Level) {
+  section('Proving Ground: reveal run')
+  const full = revealPilotRun(level)
+  const score = full.score
+  check(
+    'reveal run: every step done, no hits',
+    full.finished && full.run.hits === 0 && full.run.falls === 0 && full.run.badLandings === 0,
+    `${f1(full.time)} s, ${stepsLine(full.run)}; ${full.events.join(' · ')}`,
+  )
+  info(
+    'reveal run: score',
+    `${score.total} (${score.medal ?? 'no medal'}): ${score.lines.map((l) => `${l.label} ${l.detail} ${l.points}`).join(', ')}`,
+  )
+
+  // Riding over the top with no fans and no hold: off the loop, back to the half-loop step.
+  const over = stuntWatcher(level)
+  loopRun(level, { speed: 25, fans: false, onRamp: () => released(), watch: over.watch })
+  check(
+    'reveal: riding over the top without a hold falls off the loop',
+    over.run.falls >= 1 && over.run.step === 0,
+    `step ${over.run.step}, ${over.run.falls} falls; ${over.events.join(' · ')}`,
+  )
+
+  // Dropping off the lip doing nothing: Pro lands on its roof, a bad landing, and the run goes
+  // on to the fleet. Beginner's auto-right is a landing too, whatever its kind.
+  const idle = stuntWatcher(level)
+  dropRun(level, 25, false, idle.watch)
+  const idleLine = `step ${idle.run.step}, ${stepsLine(idle.run)}; ${idle.events.join(' · ')}`
+  if (mode === 'pro') {
+    check(
+      'reveal: drop doing nothing scores a bad landing, on to the fleet',
+      idle.run.badLandings === 1 && idle.run.outcomes[3] === 'failed' && idle.run.step === 4,
+      idleLine,
+    )
+  } else {
+    check(
+      'reveal: drop doing nothing (auto-right) lands, on to the fleet',
+      idle.run.step === 4,
+      idleLine,
+    )
+  }
+
+  // The fleet step on its own: the kickflip from rest completes it, and cutting the lift short
+  // clips the semi, which costs points.
+  const atFleet = () => {
+    const run = createStuntRun()
+    run.step = 4
+    return stuntWatcher(level, run)
+  }
+  const clean = atFleet()
+  fleetJumpRun(level, 'standing', { rollAfter: 1.6, watch: clean.watch })
+  check(
+    'reveal: kickflip from rest completes the fleet jump',
+    clean.run.step === 5 && clean.run.hits === 0 && clean.run.flipTurns > 0.9,
+    `step ${clean.run.step}, ${f2(clean.run.flipTurns)} turns, fleet ${clean.run.outcomes[4]}; ${clean.events.join(' · ')}`,
+  )
+  const short = atFleet()
+  fleetJumpRun(level, 'standing', { rollAfter: 1.2, watch: short.watch })
+  check(
+    'reveal: 1.2 s of lift from rest clips a car, a penalty',
+    short.run.hits > 0 && short.events.some((e) => e.startsWith('Hit -')),
+    `step ${short.run.step}, ${short.run.hits} hits; ${short.events.join(' · ')}`,
+  )
+}
+
 function provingGround() {
   const level = PROVING_GROUND
   section('Proving Ground')
@@ -1105,6 +1270,7 @@ function provingGround() {
   lipDrop(level)
 
   fleet(level)
+  revealRun(level)
 
   // The perimeter wall holds a boosted car.
   const sim = createSim(level, [0, REST, -150], WEST, 45)
@@ -1128,9 +1294,10 @@ type LoopRun = {
   boost?: boolean
   fans: boolean // false: automatic fans off too
   onRamp: (sim: Sim) => CarControls
+  watch?: (sim: Sim) => void // called after every step
 }
 
-function loopRun(level: Level, { speed, boost, fans, onRamp }: LoopRun) {
+function loopRun(level: Level, { speed, boost, fans, onRamp, watch }: LoopRun) {
   const loop = level.loops[0]
   const at: Vec3 = [loop.start[0], REST, loop.start[2] + 30]
   const sim = createSim(level, at, NORTH, speed, fans ? {} : { autoFans: 0 })
@@ -1153,6 +1320,7 @@ function loopRun(level: Level, { speed, boost, fans, onRamp }: LoopRun) {
       ? onRamp(sim)
       : drive({ throttle: s.flatSpeed < speed ? 1 : 0, boost: !!boost && s.flatSpeed < speed })
     sim.step(c)
+    watch?.(sim)
     const after = pose(sim)
     peak = Math.max(peak, after.p.y)
     minUp = Math.min(minUp, after.up.y)
@@ -1255,7 +1423,7 @@ function dropDriver(sim: Sim): CarControls {
 
 // Climb with the fans, hold under the top for 2 s, drive off the lip and either fly the drop
 // (roll and lift) or do nothing; reports the first landing after the lip.
-function dropRun(level: Level, speed: number, fly: boolean) {
+function dropRun(level: Level, speed: number, fly: boolean, watch?: (sim: Sim) => void) {
   const drop = {
     fuelAtLip: NaN,
     landed: false,
@@ -1283,7 +1451,7 @@ function dropRun(level: Level, speed: number, fly: boolean) {
     return fly && !drop.landed ? dropDriver(sim) : released()
   }
   const driver = fansDriver(2, afterLip)
-  const r = loopRun(level, { speed, fans: true, onRamp: driver.onRamp })
+  const r = loopRun(level, { speed, fans: true, onRamp: driver.onRamp, watch })
   return { ...r, ...drop, held: driver.stats.holdTime }
 }
 

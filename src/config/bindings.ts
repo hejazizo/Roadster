@@ -19,6 +19,7 @@ export type ButtonAction =
   | 'next' // next option on a menu screen
   | 'assists' // switch assist mode on the main and pause menus
   | 'level' // switch level on the main menu
+  | 'mode' // switch run mode (time trial / reveal run) on the main menu
   | 'mute' // sound on / off
   | 'camera' // debug orbit cam
   | 'tuning' // debug tuning panel
@@ -93,6 +94,8 @@ export const BINDINGS: {
     next: { keys: ['ArrowRight', 'KeyD'], pad: [DPAD_RIGHT] },
     assists: { keys: ['KeyT'], pad: [Y] },
     level: { keys: ['KeyL'], pad: [RB] },
+    // The fans' button, which does nothing on a menu.
+    mode: { keys: ['KeyN'], pad: [LB] },
     mute: { keys: ['KeyM'], pad: [] },
     camera: { keys: ['KeyC'], pad: [] },
     tuning: { keys: ['Backquote'], pad: [] },

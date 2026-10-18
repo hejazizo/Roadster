@@ -225,6 +225,30 @@ export const TUNING = {
     countdown: 3, // s from restart to go; the car is held until then
     ringDepth: 1, // m, thickness of a ring's sensor along its axis (read at mount)
   },
+  // Reveal run (M16.5): the stunt steps and their score (src/state/stuntRun.ts).
+  reveal: {
+    holdMin: 2, // s of unbroken ceiling hold that completes the inverted hold
+    holdCap: 6, // s of hold that score at most
+    floorY: 1.5, // m, the car touching below this height is back on the pad
+    uprightDot: 0.7, // car up · world up that counts as rolled upright in the drop
+    rowMargin: 1, // m, the fleet's footprint padded to the sides for "over the row"
+    timeBonus: 3000, // points for a run of 0 s…
+    timePerSecond: 25, // …less this per second, down to 0
+    holdPerSecond: 250, // per s of inverted hold, once it reaches holdMin
+    rollPerTurn: 500, // per turn of roll in the drop and over the fleet
+    cleanLanding: 1000, // per clean landing (the drop and the fleet)
+    noContact: 1500, // a run with no parked car clipped
+    badLanding: 1000, // taken off per bad landing (or recovery with R mid-drop)
+    hit: 500, // taken off per parked car clipped…
+    hitCap: 4, // …counting at most this many
+    fellOffLoop: 500, // taken off each time the car comes off the loop before the hold
+    // Medal targets per assist mode. The sim's scripted run (`npm run sim:car proving`) scores
+    // ~7,550 in 36 s on both; Pro is set lower, since it flies without auto-fans or auto-right.
+    medals: {
+      beginner: { bronze: 4000, silver: 6000, gold: 7500 },
+      pro: { bronze: 3500, silver: 5500, gold: 7000 },
+    },
+  },
   camera: {
     chase: {
       distance: 7, // m behind the car at rest

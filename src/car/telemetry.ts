@@ -1,7 +1,7 @@
 import type { RapierRigidBody } from '@react-three/rapier'
 import { MathUtils, Quaternion, Vector3 } from 'three'
 import { TUNING } from '../config/tuning'
-import type { AbilityState, VehicleController } from './abilities'
+import type { AbilityState, Hold, VehicleController } from './abilities'
 import type { PhysicsWorld } from './respawn'
 import type { CarControls } from './useCarControls'
 
@@ -30,6 +30,7 @@ export type CarTelemetry = {
   speed: number // m/s along the car's forward axis (negative in reverse)
   throttle: number // -1…1, the throttle the car was given this step
   grounded: boolean // a wheel touches the ground
+  hold: Hold // on a wall or ceiling (from the abilities)
   touching: boolean // a wheel or the chassis does (a car on its roof touches but isn't grounded)
   airTime: number // s since the car last touched the ground
   fallSpeed: number // m/s towards the surface landed on, at the last landing (else downwards)
@@ -52,6 +53,7 @@ export const createTelemetry = (): CarTelemetry => ({
   speed: 0,
   throttle: 0,
   grounded: false,
+  hold: 'none',
   touching: false,
   // The car starts in the air at spawn; see resetTelemetry.
   airTime: -Infinity,
@@ -235,6 +237,7 @@ export function stepTelemetry(
     t.airTime = 0
   }
   t.grounded = grounded
+  t.hold = abilities.hold
   t.touching = touching
 
   // A hit is a touch after a moment clear of the fleet, so a scrape or a bounce counts once.

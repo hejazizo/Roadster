@@ -6,6 +6,7 @@ import Car from '../car/Car'
 import { createTelemetry } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
 import { useLevel } from '../state/levelStore'
+import { useRunMode } from '../state/modeStore'
 import { useRaceStore } from '../state/raceStore'
 import Effects from './Effects'
 import Level from './Level'
@@ -20,6 +21,9 @@ export default function World() {
   const telemetry = useRef(createTelemetry())
   const paused = useRaceStore((s) => s.paused)
   const level = useLevel()
+  const mode = useRunMode()
+  // The reveal run starts on its own spot, lined up on the half-loop.
+  const spawn = mode === 'reveal' && level.stunts ? level.stunts.spawn : level.spawn
 
   return (
     <>
@@ -35,10 +39,16 @@ export default function World() {
             ref={carRef}
             visualRef={carVisualRef}
             telemetry={telemetry}
-            spawn={level.spawn}
+            spawn={spawn}
             jets={level.jets !== false}
           />
-          <Race key={`race-${level.id}`} level={level} car={carRef} />
+          <Race
+            key={`race-${level.id}-${mode}`}
+            level={level}
+            mode={mode}
+            car={carRef}
+            telemetry={telemetry}
+          />
           {/* Inside Physics so the chase cam can raycast against the level. */}
           <CameraRig target={carVisualRef} body={carRef} telemetry={telemetry} />
         </Physics>

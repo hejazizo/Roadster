@@ -77,4 +77,11 @@ export const PROVING_GROUND: Level = {
     { center: [-55, 2.5, -290], yaw: WEST, radius: 3.5 }, // along the north end
     { center: [-70, 1, -100], yaw: SOUTH, radius: 5 }, // start/finish arch, half buried
   ],
+
+  // The reveal run starts on the half-loop's run-up and finishes on the fleet's landing
+  // straight, ~60 m past the semi's nose.
+  stunts: {
+    spawn: { position: [-50, 1.5, 25], yaw: NORTH },
+    finish: { center: [FLEET_X, 1, -270], yaw: NORTH, radius: 5 },
+  },
 }

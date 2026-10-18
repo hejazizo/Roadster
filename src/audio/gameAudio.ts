@@ -6,7 +6,7 @@ import { setAudioPaused, startAudio } from './audio'
 import { setMusicIntensity, startMusic } from './music'
 import { sfx } from './sounds'
 
-// Sounds for race events: countdown beeps, rings, finish. Pause muffles the music and
+// Sounds for race events: countdown beeps, rings, reveal-run steps and penalties, finish. Pause muffles the music and
 // silences the car; a run gets the full music.
 function onRaceChange(s: RaceState, prev: RaceState) {
   if (s.paused !== prev.paused) setAudioPaused(s.paused)
@@ -23,6 +23,8 @@ function onRaceChange(s: RaceState, prev: RaceState) {
 
   if (s.phase === 'finished' && prev.phase !== 'finished') sfx.finish(s.newBest)
   else if (s.phase === 'racing' && s.nextRing > prev.nextRing) sfx.ring(prev.nextRing)
+  else if (s.phase === 'racing' && s.stuntSteps > prev.stuntSteps) sfx.stunt(prev.stunt.step)
+  if (s.phase === 'racing' && s.stuntFails > prev.stuntFails) sfx.stuntFail()
 }
 
 // The first click or key press starts audio and the music, matched to the game's state;

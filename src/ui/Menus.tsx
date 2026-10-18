@@ -7,16 +7,19 @@ import { onPress } from '../input/input'
 import { LEVELS } from '../scene/levels'
 import { ASSIST_MODES, useAssistStore } from '../state/assistStore'
 import { useInputStore } from '../state/inputStore'
-import { useLevelStore } from '../state/levelStore'
+import { useLevel, useLevelStore } from '../state/levelStore'
+import { RUN_MODES, useModeStore, useRunMode } from '../state/modeStore'
 import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
+import { medalFor, type Medal } from '../state/stuntRun'
+import { formatPoints } from './formatPoints'
 import { formatTime } from './formatTime'
 import './Menus.css'
 import SoundSettings from './SoundSettings'
 
 const play = () => {
   sfx.uiConfirm()
-  useRaceStore.getState().restart()
+  useRaceStore.getState().restart(useAssistStore.getState().mode)
 }
 const quit = () => {
   sfx.uiBack()
@@ -86,6 +89,8 @@ function useMenuInput() {
           pick(() => usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1))
         } else if (screen === 'main' && action === 'level') {
           pick(() => useLevelStore.getState().cycleLevel())
+        } else if (screen === 'main' && action === 'mode' && hasStunts()) {
+          pick(() => useModeStore.getState().cycleMode())
         } else if (screen !== 'results' && action === 'assists') {
           pick(() => useAssistStore.getState().cycleMode())
         }
@@ -96,6 +101,9 @@ function useMenuInput() {
     const offGamepads = useInputStore.subscribe((s, prev) => {
       if (s.gamepads < prev.gamepads) pause()
     })
+    const offAssists = useAssistStore.subscribe(({ mode }) =>
+      useRaceStore.getState().noteAssist(mode),
+    )
     const onVisibilityChange = () => {
       if (document.hidden) pause()
     }
@@ -105,10 +113,17 @@ function useMenuInput() {
     return () => {
       offPress()
       offGamepads()
+      offAssists()
       window.removeEventListener('blur', pause)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
+}
+
+// The chosen level offers the reveal run.
+const hasStunts = () => {
+  const { levelId } = useLevelStore.getState()
+  return LEVELS.some(({ level }) => level.id === levelId && level.stunts)
 }
 
 type MenuButtonProps = {
@@ -233,24 +248,94 @@ function LevelPicker() {
   )
 }
 
-function MainMenu() {
+// Run mode on the main menu, on a level that has a reveal run; a segmented pair like the level.
+function ModePicker() {
+  const mode = useRunMode()
+  const device = useInputStore((s) => s.device)
+  const stunts = useLevel().stunts
+  if (!stunts) return null
+  return (
+    <div className="menu-assists">
+      <div className="menu-paint-label">
+        <span className="hud-label">Mode</span>
+        <kbd className="menu-key">{bindingLabel(['mode'], device)}</kbd>
+      </div>
+      <div className="menu-segments" role="radiogroup" aria-label="Mode">
+        {RUN_MODES.map(({ id, name }) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={id === mode}
+            tabIndex={-1}
+            className={`menu-segment${id === mode ? ' is-selected' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => pick(() => useModeStore.getState().setMode(id))}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <div className="menu-assists-hint">
+        {mode === 'reveal'
+          ? 'Half-loop, inverted hold, drop, fleet jump: scored'
+          : 'Every ring in order, against the clock'}
+      </div>
+    </div>
+  )
+}
+
+const MEDAL_NAMES = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' }
+
+function MedalBadge({ medal }: { medal: Medal }) {
+  if (!medal) return null
+  return <span className={`menu-medal is-${medal}`}>{MEDAL_NAMES[medal]}</span>
+}
+
+// The saved best for the chosen level, mode and (for the reveal run) assist mode.
+function BestLine() {
+  const mode = useRunMode()
+  const assist = useAssistStore((s) => s.mode)
   const bestTime = useRaceStore((s) => s.bestTime)
+  const bestScore = useRaceStore((s) => s.bestScores[assist])
+  if (mode === 'reveal') {
+    return (
+      <div className="menu-best">
+        {bestScore === null ? (
+          'No best score yet'
+        ) : (
+          <>
+            <span className="hud-label">Best</span> {bestScore}{' '}
+            <MedalBadge medal={medalFor(bestScore, assist)} />
+          </>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="menu-best">
+      {bestTime === null ? (
+        'No best time yet'
+      ) : (
+        <>
+          <span className="hud-label">Best</span> {formatTime(bestTime)}
+        </>
+      )}
+    </div>
+  )
+}
+
+function MainMenu() {
+  const mode = useRunMode()
   const device = useInputStore((s) => s.device)
   return (
     <div className="menu">
       <div className="menu-card">
         <h1 className="menu-title">Roadster</h1>
-        <div className="menu-subtitle">Ring time trial</div>
+        <div className="menu-subtitle">{RUN_MODES.find((m) => m.id === mode)?.name}</div>
         <LevelPicker />
-        <div className="menu-best">
-          {bestTime === null ? (
-            'No best time yet'
-          ) : (
-            <>
-              <span className="hud-label">Best</span> {formatTime(bestTime)}
-            </>
-          )}
-        </div>
+        <ModePicker />
+        <BestLine />
         <PaintPicker />
         <AssistPicker />
         <div className="menu-buttons">
@@ -304,7 +389,59 @@ function PauseMenu() {
   )
 }
 
+// The reveal run's results: the score, its medal and the breakdown.
+function StuntResults() {
+  const score = useRaceStore((s) => s.score)
+  const assist = useRaceStore((s) => s.assist)
+  const best = useRaceStore((s) => s.bestScores[s.assist])
+  const newBest = useRaceStore((s) => s.newBest)
+  if (!score) return null
+  return (
+    <div className="menu">
+      <div className="menu-card">
+        <h2 className="menu-heading">Reveal run</h2>
+        <div className="menu-time">{score.total}</div>
+        <div className="menu-best">
+          <MedalBadge medal={score.medal} />{' '}
+          {newBest ? (
+            <span className="menu-badge">New best!</span>
+          ) : (
+            best !== null && (
+              <>
+                <span className="hud-label">Best</span> {best}
+              </>
+            )
+          )}
+        </div>
+        <table className="menu-breakdown">
+          <tbody>
+            {score.lines.map(({ label, detail, points }) => (
+              <tr key={label} className={points < 0 ? 'is-penalty' : undefined}>
+                <th>{label}</th>
+                <td>{detail}</td>
+                <td>{formatPoints(points)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="menu-assists-hint">
+          Scored as {ASSIST_MODES.find((m) => m.id === assist)?.name}
+        </div>
+        <div className="menu-buttons">
+          <MenuButton primary label="Retry" action="confirm" onClick={play} />
+          <MenuButton label="Menu" action="back" onClick={quit} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Results() {
+  const reveal = useRaceStore((s) => s.mode === 'reveal')
+  return reveal ? <StuntResults /> : <TimeResults />
+}
+
+function TimeResults() {
   const finalTime = useRaceStore((s) => s.finalTime ?? 0)
   const bestTime = useRaceStore((s) => s.bestTime)
   const newBest = useRaceStore((s) => s.newBest)
