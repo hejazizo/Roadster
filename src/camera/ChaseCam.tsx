@@ -12,6 +12,8 @@ import { useRaceStore } from '../state/raceStore'
 const MIN_FLAT_FORWARD = 0.2
 // How far down (m) to look for the surface below the camera.
 const GROUND_PROBE = 100
+// m short of a clear view at which the eased wall release lets go.
+const REACH_SLACK = 0.05
 
 const carPos = new Vector3()
 const carQuat = new Quaternion()
@@ -51,6 +53,9 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
   const started = useRef(false)
   // Camera position before the shake offset, which is the state the follow lerps from.
   const steadyPos = useRef(new Vector3())
+  // How far from the car's look point the camera may be: cut short at once by a wall, eased
+  // back out after it, so a wall passing between doesn't make the camera pop in and out.
+  const reach = useRef(Infinity)
   const shake = useRef({ trauma: 0, time: 0, landings: telemetry.current.landings })
 
   // Leave the debug orbit cam with the normal field of view.
@@ -78,6 +83,7 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
       lookDamping,
       minHeight,
       obstructionMargin,
+      obstructionRelease,
       snapDistance,
       fov,
       boostFov,
@@ -142,16 +148,22 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     }
 
     // Pull in in front of anything between the car and the camera. Not damped, so the
-    // camera never shows the inside of a wall.
+    // camera never shows the inside of a wall; moving back out is.
     r.origin = { x: carPos.x, y: carPos.y + lookHeight, z: carPos.z }
     toCamera.copy(camera.position).sub(r.origin)
     const camDist = toCamera.length()
     if (camDist > 0) {
       r.dir = toCamera.divideScalar(camDist)
       const hit = world.castRay(r, camDist, true, solidOnly, undefined, undefined, carBody)
-      if (hit) {
-        const d = Math.max(hit.timeOfImpact - obstructionMargin, 0)
-        camera.position.copy(r.origin).addScaledVector(toCamera, d)
+      const clear = hit ? Math.max(hit.timeOfImpact - obstructionMargin, 0) : camDist
+      reach.current =
+        clear < reach.current || teleported || !started.current
+          ? clear
+          : MathUtils.damp(reach.current, clear, obstructionRelease, dt)
+      // Caught up with a clear view: stop limiting the follow.
+      if (!hit && reach.current > camDist - REACH_SLACK) reach.current = Infinity
+      if (reach.current < camDist) {
+        camera.position.copy(r.origin).addScaledVector(toCamera, reach.current)
       }
     }
 

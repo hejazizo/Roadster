@@ -39,15 +39,48 @@ export const TUNING = {
       relaxation: 2.3,
       maxForce: 100000,
     },
+    // Grip curve: a tyre holds full grip up to the peak slip angle (between where it points
+    // and where it's going), then fades to slideGrip as the slide grows, so a slide keeps
+    // going until it's caught and grip comes back as the angle closes.
     tires: {
-      frictionSlip: 2.5,
+      frictionSlip: 2.5, // peak grip
       sideFrictionStiffness: 1,
+      peakSlipAngle: 0.14, // rad (8°)
+      slideSlipAngle: 0.45, // rad (26°) where grip has fallen to slideGrip
+      slideGrip: 0.75, // fraction of peak grip while sliding
+      rearGrip: 1, // rear tyres' grip relative to the front (balance)
+    },
+    // Arcade drift: the handbrake, or the rear stepping out under throttle, starts a drift that
+    // lowers rear grip until the car runs straight again; throttle holds the slide.
+    drift: {
+      minSpeed: 8, // m/s
+      entryAngle: 0.2, // rad of rear slip under throttle that starts a drift
+      exitAngle: 0.1, // rad, the drift ends after the rear slip stays below this…
+      exitTime: 0.25, // …for this long (s) without the handbrake
+      rearGrip: 0.7, // rear grip while drifting, as a fraction of normal…
+      throttleGrip: 0.25, // …less this much more on full throttle, so throttle holds the slide
+      thrust: 6, // m/s² push along the heading on full throttle, so a slide keeps its speed
+      gripDropRate: 1.5, // per s, how quickly rear grip drops when a drift starts
+      recoverTime: 0.5, // s for rear grip to come back after a drift
     },
     engine: {
       force: 400, // per driven (rear) wheel
       reverseForce: 250,
-      maxSpeed: 30, // m/s, engine cuts out above this
+      maxSpeed: 32, // m/s, the force fades to nothing here (drag holds the car a little below)
+      taper: 6, // force × (1 − (speed / maxSpeed)^taper): higher keeps full force longer
       maxReverseSpeed: 8,
+    },
+    // Grounded only, per unit of mass and speed² (1/m), so flight isn't affected.
+    aero: {
+      drag: 0.001, // m/s² of drag per (m/s)²
+      downforce: 0.002, // m/s² pressing the car down per (m/s)²
+    },
+    // The vehicle controller applies tyre forces near the centre of mass, so the body hardly
+    // leans. These add the lean (and the load shift onto the outside / front wheels) a centre
+    // of mass this high (m) above that point would give.
+    weightTransfer: {
+      roll: 0.25,
+      pitch: 0.1,
     },
     brake: {
       force: 10,
@@ -57,6 +90,9 @@ export const TUNING = {
     steering: {
       maxAngle: 0.5, // rad
       speed: 2.5, // rad/s the wheels turn towards the target angle
+      returnSpeed: 4, // rad/s back towards the centre
+      highSpeedFactor: 0.35, // fraction of maxAngle left at fullSpeed (not while drifting)
+      fullSpeed: 35, // m/s
     },
     // Below this speed (m/s) S starts reversing instead of braking, and W the other way round.
     stopSpeed: 0.5,
@@ -72,23 +108,36 @@ export const TUNING = {
     },
     hop: {
       velocity: 6, // m/s added along the car's up axis
+      buffer: 0.15, // s a press early before landing is kept
+      coyoteTime: 0.12, // s after driving off an edge that a hop still works
+      cooldown: 0.25, // s between hops
     },
     glide: {
-      gravityScale: 0.25, // fraction of world gravity while gliding
+      gravityScale: 0.25, // fraction of world gravity while gliding and falling
+      riseGravityScale: 0.5, // fraction while gliding and still rising (less lift from a hop)
       maxFallSpeed: 3, // m/s, faster falls are damped towards this
       fallDamping: 3, // 1/s
       headingAlign: 1.5, // 1/s, how quickly horizontal velocity turns to follow the car's heading
       fuelPerSecond: 0.25,
     },
-    // Light air control while gliding: pitch (W/S, stick Y) tilts the nose, steer yaws and banks
-    // into the turn; analog input scales the angles and rates.
-    // Pitch and roll hold an angle and level out on release, so the car can't be flipped.
+    // Air control: pitch (W/S, stick Y) tilts the nose, steer yaws and banks into the turn;
+    // analog input scales the angles and rates. Full strength while gliding, weaker while
+    // plainly airborne. Pitch and roll hold an angle and level out on release (relative to
+    // the ground below once it's near), so the car can't be flipped and lands on its wheels.
     airControl: {
       pitchAngle: 0.4, // rad nose down (W) or up (S)
       bankAngle: 0.4, // rad of roll while yawing
       levelRate: 3, // 1/s, how quickly pitch and roll follow their target angle
       yawRate: 1.5, // rad/s
       damping: 4, // 1/s, how quickly spin follows the input
+      plainFactor: 0.35, // angles and yaw control while airborne without gliding
+      groundProbe: 6, // m, below this the car levels to the ground's slope instead of flat
+    },
+    // Touchdown settling: spin is damped for a moment after a landing.
+    landing: {
+      minAirTime: 0.25, // s airborne before a touchdown counts
+      assistTime: 0.35, // s
+      spinDamping: 8, // 1/s on roll and yaw spin, scaled by the assist level
     },
     // Respawn point after a fall or R: the last pose that was upright, on all four
     // wheels and away from edges for a moment. Falls back to spawn until one is recorded.
@@ -98,6 +147,27 @@ export const TUNING = {
       edgeMargin: 4, // m of level ground needed ahead, behind and to each side
       flatTolerance: 0.4, // m the ground under each edge probe may differ from under the car
       lift: 0.3, // m above the recorded pose to respawn at
+    },
+  },
+  // Driving and flying help, per assist mode (picked on the main menu, src/state/assistStore.ts).
+  assists: {
+    beginner: {
+      counterSteer: 0.6, // 0–1, front wheels turn towards the slide while drifting
+      driftAngle: 0.6, // rad of slide a drift is held to…
+      driftHold: 40, // …by damping spin that would widen it (1/s per rad past the angle)
+      yawDamping: 4, // 1/s on spin beyond what the steering asks for (outside a drift)
+      tractionControl: 0.8, // 0–1, engine cut when the rear slides without a drift
+      airLevel: 1.5, // × airControl.levelRate
+      landing: 1, // × landing.spinDamping
+    },
+    pro: {
+      counterSteer: 0,
+      driftAngle: 1,
+      driftHold: 15,
+      yawDamping: 0.5,
+      tractionControl: 0,
+      airLevel: 0.7,
+      landing: 0.4,
     },
   },
   input: {
@@ -123,6 +193,7 @@ export const TUNING = {
       lookDamping: 10,
       minHeight: 0.5, // m above the surface below the camera
       obstructionMargin: 0.3, // m the camera stays in front of a wall between it and the car
+      obstructionRelease: 3, // 1/s, how quickly it moves back out once the wall is gone
       snapDistance: 10, // m the car moves in one frame (reset/respawn) that snaps the camera
       fov: 50, // vertical field of view (degrees)
       boostFov: 12, // extra degrees while boosting

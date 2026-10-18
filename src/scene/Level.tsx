@@ -3,7 +3,7 @@ import { ConvexHullCollider, CuboidCollider, RigidBody } from '@react-three/rapi
 import { useMemo } from 'react'
 import { BufferGeometry, DoubleSide, Float32BufferAttribute, Vector3 } from 'three'
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
-import type { Box, Level as LevelData, Ramp } from './testLevel'
+import { rampVertices, type Box, type Level as LevelData, type Ramp } from './testLevel'
 
 const GROUND_COLOR = '#6b8e4e'
 const GRID_COLOR = '#55733d'
@@ -29,21 +29,9 @@ function BoxPiece({ center, size, color }: Box & { color: string }) {
   )
 }
 
-// Wedge corners in ramp-local space: +Z along the run, low edge at the origin, bottom on
-// the ground (y = -start.y).
-function rampVertices({ start, run, rise, width }: Ramp): Vector3[] {
-  const floor = -start[1]
-  return [width / 2, -width / 2].flatMap((x) => [
-    new Vector3(x, 0, 0),
-    new Vector3(x, rise, run),
-    new Vector3(x, floor, run),
-    ...(floor < 0 ? [new Vector3(x, floor, 0)] : []),
-  ])
-}
-
 function RampPiece({ ramp }: { ramp: Ramp }) {
   const { points, geometry } = useMemo(() => {
-    const vertices = rampVertices(ramp)
+    const vertices = rampVertices(ramp).map((v) => new Vector3(...v))
     return {
       points: new Float32Array(vertices.flatMap((v) => v.toArray())),
       geometry: new ConvexGeometry(vertices),

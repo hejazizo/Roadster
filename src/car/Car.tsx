@@ -10,6 +10,7 @@ import { Suspense, useEffect, useRef, type RefObject } from 'react'
 import { MathUtils, type Group, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
 import { rumble } from '../input/input'
+import { currentAssist } from '../state/assistStore'
 import { useCarStore } from '../state/carStore'
 import { isCarHeld, useRaceStore } from '../state/raceStore'
 import CarAudio from '../audio/CarAudio'
@@ -21,11 +22,12 @@ import {
   type VehicleController,
 } from './abilities'
 import CarModel from './CarModel'
+import { createDrivingState, resetDriving, stepDriving } from './handling'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
 import { resetTelemetry, stepTelemetry, type CarTelemetry } from './telemetry'
 import { released, useCarControls } from './useCarControls'
 
-const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
+const { spawn, chassis, wheels, suspension } = TUNING.car
 
 // Tail-light brightness while braking, as a multiple of the model's own.
 const BRAKE_LIGHT_BOOST = 3
@@ -33,25 +35,11 @@ const BRAKE_LIGHT_BOOST = 3
 const BOOST_RUMBLE = { strength: 0.35, ms: 120 }
 const LANDING_RUMBLE = { strength: 1, ms: 180 }
 
-const isFront = (i: number) => i < 2
-
 // Controls while the race holds the car at the start.
 const HELD = { ...released(), handbrake: true }
 // After the finish the car rolls to a stop on the idle brake behind the results screen
 // (a rear handbrake at boost speed could spin it).
 const COASTING = released()
-
-// Applied every step so suspension and tire changes from the tuning panel take effect live.
-function applyWheelTuning(vc: VehicleController, i: number) {
-  vc.setWheelSuspensionRestLength(i, suspension.restLength)
-  vc.setWheelMaxSuspensionTravel(i, suspension.maxTravel)
-  vc.setWheelSuspensionStiffness(i, suspension.stiffness)
-  vc.setWheelSuspensionCompression(i, suspension.compression)
-  vc.setWheelSuspensionRelaxation(i, suspension.relaxation)
-  vc.setWheelMaxSuspensionForce(i, suspension.maxForce)
-  vc.setWheelFrictionSlip(i, tires.frictionSlip)
-  vc.setWheelSideFrictionStiffness(i, tires.sideFrictionStiffness)
-}
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
@@ -65,7 +53,7 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
   const { world, rapier } = useRapier()
   const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
-  const steer = useRef(0)
+  const driving = useRef(createDrivingState())
   const runId = useRef(useRaceStore.getState().runId)
   const abilities = useRef(createAbilityState())
   const safePoint = useRef(createSafePoint())
@@ -122,44 +110,19 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
     // R or falling out of the world puts the car back at its last safe point.
     const fell = body.translation().y < TUNING.world.killY
     if (restarted || c.reset || fell) {
-      placeAtSafePoint(safePoint.current, body)
-      steer.current = 0
+      placeAtSafePoint(safePoint.current, body, fell && !restarted ? body.translation() : undefined)
+      resetDriving(driving.current)
       resetAbilities(abilities.current, body)
       resetTelemetry(telemetry.current, !restarted)
     }
 
-    // Analog throttle: forces scale with how far the trigger (or key, fully) is pressed.
-    const speed = vc.currentVehicleSpeed()
-    const { stopSpeed } = TUNING.car
-    const t = c.throttle
-    let engineForce = 0
-    let brakeForce = 0
-    if (t > 0) {
-      if (speed < -stopSpeed) brakeForce = brake.force * t
-      else if (speed < engine.maxSpeed) engineForce = engine.force * t
-    } else if (t < 0) {
-      if (speed > stopSpeed) brakeForce = brake.force * -t
-      else if (speed > -engine.maxReverseSpeed) engineForce = engine.reverseForce * t
-    } else {
-      brakeForce = brake.idleBrake
-    }
-
-    // Positive steering angle turns left.
-    const steerTarget = -c.steer * steering.maxAngle
-    const maxDelta = steering.speed * world.timestep
-    steer.current += MathUtils.clamp(steerTarget - steer.current, -maxDelta, maxDelta)
-
-    for (let i = 0; i < wheels.positions.length; i++) {
-      const front = isFront(i)
-      applyWheelTuning(vc, i)
-      vc.setWheelSteering(i, front ? steer.current : 0)
-      vc.setWheelEngineForce(i, front ? 0 : engineForce)
-      vc.setWheelBrake(i, !front && c.handbrake ? brake.handbrakeForce : brakeForce)
-    }
+    const assist = currentAssist()
+    stepDriving(driving.current, body, vc, c, world.timestep, assist)
     // Wheel rays and ground probes ignore sensors, so the car can't ride on a ring.
     const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     vc.updateVehicle(world.timestep, solidOnly)
-    stepAbilities(abilities.current, body, vc, c, world.timestep)
+    const probe = { world, ray: ray.current, flags: solidOnly }
+    stepAbilities(abilities.current, body, vc, c, world.timestep, assist, probe)
     stepTelemetry(telemetry.current, body, vc, c, world.timestep)
     stepSafePoint(safePoint.current, body, vc, world, ray.current, solidOnly, world.timestep)
   })
@@ -197,6 +160,7 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
       grounded,
       boosting,
       gliding,
+      drifting: driving.current.drifting,
     })
     const vc = vehicle.current
     if (!vc) return

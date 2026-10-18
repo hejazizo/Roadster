@@ -32,7 +32,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 12  | Lighting & materials           | 3 · Details | ☑      |
 | 13  | Thruster VFX & post-processing | 3 · Details | ☑      |
 | 14  | Audio                          | 3 · Details | ☑      |
-| 15  | Handling & flight polish       | 3 · Details | ☐      |
+| 15  | Handling & flight polish       | 3 · Details | ☑      |
 | 16  | Real level art                 | 3 · Details | ☐      |
 | 17  | More levels & game modes       | 3 · Details | ☐      |
 | 18  | Performance, mobile & settings | 3 · Details | ☐      |
@@ -279,6 +279,43 @@ A 3 s drive matches HEAD (15.89 m/s), and frames hold 60 fps also with the CPU t
 
 **Done when:** playtesters describe the car as fun to drive and fly, not floaty or twitchy.
 
+✅ **Done:** the driving step moved out of `Car.tsx` into `src/car/handling.ts` (`stepDriving`), so the new headless sim runs the same code as the game. The sim is `scripts/sim-car.ts`, run with `npm run sim:car` or `make sim`: 30-odd checks per assist mode on a flat pad and the test level, run before and after the changes.
+
+- **Driving:**
+  - Grip curve per tyre: full grip up to 8° of slip, fading to 75% by 26°.
+  - Speed-sensitive steering, with 35% of the lock left at 35 m/s, and a faster return to centre.
+  - Engine force fades towards top speed instead of cutting out, with grounded drag and downforce.
+  - Weight transfer: Rapier applies tyre forces near the centre of mass, so the car hardly leaned (1° at 1.4 g). A torque from the measured acceleration now gives ~5° of roll in hard corners and 3.7° of dive under braking. It only acts with all four wheels down, so it can't feed a rollover. An anti-roll bar would have removed lean the car didn't have.
+- **Arcade drift:**
+  - The handbrake, or the rear stepping out under throttle, starts a drift.
+  - Rear grip drops to 70%, and to 45% on full throttle, so throttle holds the slide and lifting straightens it.
+  - A push along the heading keeps the speed a 45° slide would scrub off.
+  - Grip eases back over 0.5 s once the car runs straight; a jump ends the drift.
+  - The HUD pill shows "Drifting".
+- **Flight:**
+  - Glide floats only on the way down: rising, gravity is ×0.5 instead of ×0.25. Hop + hold now peaks at ~4.5 m instead of ~7.5 m.
+  - Weaker air control (35%) while plainly airborne.
+  - Pitch and roll level to the ground's slope within 6 m of it.
+  - Roll and yaw spin are damped for 0.35 s after a landing.
+  - Hop buffer (0.15 s), coyote time (0.12 s) and a 0.25 s cooldown. Hops are counted in the abilities state and no longer in telemetry.
+- **Assists:** Beginner / Pro (`TUNING.assists`) set counter-steer, a drift-angle hold (35° / 57°), yaw damping, traction control, air levelling and landing damping. The mode is picked on the main and pause menus by click, T or pad Y, saved in localStorage (`src/state/assistStore.ts`, junk ignored). All new values are in tuning-panel folders.
+- **From the notes:** a respawn after a fall faces from the fall towards the safe point, away from the drop. The chase cam's wall pull-in is still instant, but it eases back out (`obstructionRelease`). The void ring moved down 0.5 m to fit the tamer climb.
+
+Sim, HEAD → M15 (Beginner):
+
+- **Speed:** 0–25 m/s 4.7 → 5.1 s; top speed 30.1 → 31.0 m/s.
+- **Corners:** full-lock skidpad 1.4–1.6 g → 1.9–2.2 g (the front no longer saturates at full lock).
+- **Drift:** a 20 m/s handbrake drift held over 15° for 0.5 → 3.1 s when caught, and 5.6 s at 21 m/s when steered to hold 25°. Pro spins if you just hold the turn, and recovers if you counter-steer.
+- **Unchanged:** no rollovers; every ring reachable on both modes. The void ring is hit by every hop + glide at 20–45 m/s (4.0–4.7 m at the ring) and missed by every plain or boosted hop (≤ 2.2 m). The 80 m gap needs a glide and can be glided at every speed. Kicker landings stay upright.
+
+Headless Chrome, 21 checks:
+
+- the Assists toggle by T, click and pad Y, persisting, junk storage ignored, ignored while racing, working on the pause menu;
+- a drift with marks and smoke and the Drifting pill;
+- after driving off the north edge, holding W keeps the car on the island;
+- no page errors;
+- 60 fps on the M2 Max.
+
 ### M16 — Real level art
 
 - Replace greybox with a themed environment: terrain, road surfaces, props, skybox, distant scenery.
@@ -323,18 +360,13 @@ Park later ideas here instead of building them early.
 - Leaderboards
 - Day/night cycle and weather
 - First load is ~1.2 MB gzipped, 842 kB of it Rapier's inlined WASM (chunk sizes in `docs/performance.md`). `@react-three/rapier` imports Rapier statically, so lazy-loading physics behind the menu needs a wrapper or an upstream change — M18/M19 (with the loading screen).
-- Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
-- Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M15. Hop presses are latched for one physics step now; a buffer would keep them a little longer.
-- Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
-- Respawn faces the way the car was heading, so after driving off an edge it faces the drop 4 m back; holding W drives straight off again. Consider facing away from the nearest edge, or a short input lockout — M15.
-- The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M15/M16).
-- The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.
+- The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M16). Grip is per tyre now (`handling.ts`), so a surface factor would multiply into it.
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
 - Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons) and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data. Rumble (M13) has no on/off setting yet — M18 settings.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
-- The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M15/M16).
+- The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M16).
 - The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
 - The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16/M19 if it matters).
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
@@ -343,8 +375,11 @@ Park later ideas here instead of building them early.
 - Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16).
 - `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
-- Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M15/M16). Marks are drawn on any ground the wheels touch, including ramps.
+- Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M16). Marks are drawn on any ground the wheels touch, including ramps.
 - The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.
 - Volume can only be set with the mouse (sliders) or muted with M; keyboard and gamepad navigation of the sliders belongs to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
-- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with M15/M16 grip. Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
-- The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M15/M19).
+- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with M16 surfaces. Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
+- The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M19).
+- Handling (M15) was tuned with the headless sim (`npm run sim:car`) plus a short playtest. The sim's drivers are crude (a P-controller on slide angle), so its numbers say "can be caught" or "can be held", not how it feels. Re-run it after level or tuning changes (M16/M17), since the void ring and the 80 m gap are sized to the glide.
+- Assists are two fixed presets; the M18 settings menu could expose them one by one (e.g. counter-steer off with drift hold on). Holding full lock after a handbrake on Beginner turns a tight donut. On Pro it spins, unless you counter-steer.
+- Drifts have no sound of their own beyond the tyre squeal, and no score; drift scoring could be an M17 mode.

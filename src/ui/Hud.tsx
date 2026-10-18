@@ -35,7 +35,9 @@ function FuelBar() {
 }
 
 function Status() {
-  const status = useCarStore((s) => (s.grounded ? 'Grounded' : s.gliding ? 'Gliding' : 'Airborne'))
+  const status = useCarStore((s) =>
+    s.grounded ? (s.drifting ? 'Drifting' : 'Grounded') : s.gliding ? 'Gliding' : 'Airborne',
+  )
   return <div className={`hud-status is-${status.toLowerCase()}`}>{status}</div>
 }
 

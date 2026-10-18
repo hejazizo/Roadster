@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "model:car": "node scripts/build-car-model.ts",
-    "model:car:kenney": "node scripts/build-car-model-kenney.ts"
+    "model:car:kenney": "node scripts/build-car-model-kenney.ts",
+    "sim:car": "node scripts/sim-car.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

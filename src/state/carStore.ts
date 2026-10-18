@@ -7,6 +7,7 @@ export type CarState = {
   grounded: boolean
   boosting: boolean
   gliding: boolean
+  drifting: boolean
 }
 
 // Read-only mirror of the car's state for the UI. The car owns the real state (in refs,
@@ -17,4 +18,5 @@ export const useCarStore = create<CarState>(() => ({
   grounded: false,
   boosting: false,
   gliding: false,
+  drifting: false,
 }))

@@ -26,6 +26,8 @@ export const createSafePoint = (): SafePointState => ({
 
 const Y_AXIS = new Vector3(0, 1, 0)
 const PROBE_DIST = 5 // m below the car's centre, well past the wheels' reach
+// A fall closer than this (m) to the safe point gives no clear direction to face.
+const MIN_FACING_DIST = 1
 const quat = new Quaternion()
 const forward = new Vector3()
 const up = new Vector3()
@@ -119,15 +121,26 @@ function onLevelGround(
 }
 
 // Puts the car at rest at the last safe point (or spawn), upright and facing its heading.
-export function placeAtSafePoint(state: SafePointState, body: RapierRigidBody) {
+// After a fall (`fellAt`, where the car fell from) it faces from there towards the safe
+// point instead, away from the drop, so holding throttle doesn't drive straight off again.
+export function placeAtSafePoint(
+  state: SafePointState,
+  body: RapierRigidBody,
+  fellAt?: { x: number; z: number },
+) {
+  let yaw = spawn.yaw
   if (state.valid) {
     const { x, y, z } = state.position
     body.setTranslation({ x, y: y + TUNING.car.respawn.lift, z }, true)
+    yaw = state.yaw
+    if (fellAt && Math.hypot(x - fellAt.x, z - fellAt.z) > MIN_FACING_DIST) {
+      yaw = Math.atan2(x - fellAt.x, z - fellAt.z)
+    }
   } else {
     const [x, y, z] = spawn.position
     body.setTranslation({ x, y, z }, true)
   }
-  body.setRotation(quat.setFromAxisAngle(Y_AXIS, state.valid ? state.yaw : spawn.yaw), true)
+  body.setRotation(quat.setFromAxisAngle(Y_AXIS, yaw), true)
   body.setLinvel({ x: 0, y: 0, z: 0 }, true)
   body.setAngvel({ x: 0, y: 0, z: 0 }, true)
   state.safeTime = 0

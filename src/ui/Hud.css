@@ -84,6 +84,10 @@
   background: #ff8c1a;
 }
 
+.hud-status.is-drifting {
+  background: #9b5de5;
+}
+
 .race-panel {
   position: absolute;
   top: 16px;

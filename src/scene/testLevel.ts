@@ -9,6 +9,18 @@ export type Box = { center: Vec3; size: Vec3 }
 // (the centre of its low edge). Its solid part reaches down to the ground.
 export type Ramp = { start: Vec3; yaw: number; run: number; rise: number; width: number }
 
+// Wedge corners in ramp-local space: +Z along the run, low edge at the origin, bottom on
+// the ground (y = -start.y).
+export function rampVertices({ start, run, rise, width }: Ramp): Vec3[] {
+  const floor = -start[1]
+  return [width / 2, -width / 2].flatMap((x): Vec3[] => [
+    [x, 0, 0],
+    [x, rise, run],
+    [x, floor, run],
+    ...(floor < 0 ? [[x, floor, 0] as Vec3] : []),
+  ])
+}
+
 // A checkpoint ring standing upright at `center`, its hole facing along `yaw`.
 export type Ring = { center: Vec3; yaw: number; radius: number }
 
@@ -108,7 +120,7 @@ export const TEST_LEVEL: Level = {
     { center: [40, 4, -40], yaw: NORTH, radius: 3 }, // up the tower
     { center: [78, 9, -90], yaw: NORTH, radius: 3 }, // hop the raised gap
     // Out over the void, above where a hop without gliding can reach (needs fuel left).
-    { center: [78, 7, -190], yaw: NORTH, radius: 3.5 },
+    { center: [78, 6.5, -190], yaw: NORTH, radius: 3.5 },
     { center: [20, 2.5, -250], yaw: WEST, radius: 3.5 }, // along the north island
     { center: [-40, 3, -160], yaw: SOUTH, radius: 3.5 }, // jump the 20 m gap back
     { center: [-70, 2, -62], yaw: SOUTH, radius: 3.5 }, // through the chicane

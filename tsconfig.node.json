@@ -19,5 +19,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "scripts"]
+  "include": ["vite.config.ts", "scripts"],
+  // Imports src/ modules, which need bundler resolution (tsconfig.sim.json).
+  "exclude": ["scripts/sim-car.ts"]
 }

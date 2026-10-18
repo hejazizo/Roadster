@@ -1,19 +1,29 @@
 import type { RapierRigidBody, useRapier } from '@react-three/rapier'
 import { MathUtils, Quaternion, Vector3 } from 'three'
 import { TUNING } from '../config/tuning'
+import type { Assist } from './handling'
+import type { PhysicsWorld, QueryFlags, Ray } from './respawn'
 import type { CarControls } from './useCarControls'
 
-const { fuel, boost, hop, glide, airControl } = TUNING.car
+const { fuel, boost, hop, glide, airControl, landing } = TUNING.car
 
 export type VehicleController = ReturnType<
   ReturnType<typeof useRapier>['world']['createVehicleController']
 >
+
+// What the ground probe below the car casts against: solid level geometry, not the car.
+export type GroundProbe = { world: PhysicsWorld; ray: Ray; flags: QueryFlags }
 
 export type AbilityState = {
   fuel: number
   grounded: boolean
   boosting: boolean
   gliding: boolean
+  hops: number // bumped on every hop, so readers (sound) can spot a new one
+  airTime: number // s since the wheels last touched the ground
+  hopBuffer: number // s a hop press is still waiting for the ground
+  sinceHop: number // s since the last hop
+  landingAssist: number // s of landing assist left
 }
 
 export const createAbilityState = (): AbilityState => ({
@@ -21,6 +31,11 @@ export const createAbilityState = (): AbilityState => ({
   grounded: false,
   boosting: false,
   gliding: false,
+  hops: 0,
+  airTime: 0,
+  hopBuffer: 0,
+  sinceHop: Infinity,
+  landingAssist: 0,
 })
 
 // Frame-rate independent lerp factor for a damping rate.
@@ -36,21 +51,27 @@ const flatVel = new Vector3()
 const heading = new Vector3()
 const spin = new Vector3()
 const impulse = new Vector3()
+const level = new Vector3()
+const groundUp = new Vector3()
+const WORLD_UP = new Vector3(0, 1, 0)
 
-// Refill and drop any glide, e.g. on reset.
+// Refill and drop any glide, e.g. on reset. The hop count carries on, so a reset doesn't
+// look like a hop to its readers.
 export function resetAbilities(state: AbilityState, body: RapierRigidBody) {
-  Object.assign(state, createAbilityState())
+  Object.assign(state, { ...createAbilityState(), hops: state.hops })
   body.setGravityScale(1, true)
 }
 
-// Boost, hop, glide and fuel for one physics step. Call after `updateVehicle`, which
-// refreshes the wheel contacts used for the grounded check.
+// Boost, hop, glide, air control and fuel for one physics step. Call after `updateVehicle`,
+// which refreshes the wheel contacts used for the grounded check.
 export function stepAbilities(
   state: AbilityState,
   body: RapierRigidBody,
   vc: VehicleController,
   c: CarControls,
   dt: number,
+  assist: Assist,
+  probe: GroundProbe,
 ) {
   const mass = body.mass()
   const r = body.rotation()
@@ -60,11 +81,27 @@ export function stepAbilities(
 
   let grounded = false
   for (let i = 0; i < vc.numWheels(); i++) grounded ||= vc.wheelIsInContact(i)
+  if (grounded && !state.grounded && state.airTime > landing.minAirTime) {
+    state.landingAssist = landing.assistTime
+  }
   state.grounded = grounded
+  state.airTime = grounded ? 0 : state.airTime + dt
+  state.sinceHop += dt
+  state.landingAssist = Math.max(0, state.landingAssist - dt)
 
-  if (c.hopPressed && grounded) {
-    impulse.copy(up).multiplyScalar(hop.velocity * mass)
+  // A press is kept for a moment until the car can hop (buffer), and the car can still hop
+  // just after driving off an edge (coyote time).
+  state.hopBuffer = c.hopPressed ? hop.buffer : Math.max(0, state.hopBuffer - dt)
+  const canHop = state.sinceHop > hop.cooldown && state.airTime <= hop.coyoteTime
+  if (state.hopBuffer > 0 && canHop) {
+    // Cancel any fall first (coyote hop), so every hop is the same height.
+    const v = body.linvel()
+    const falling = Math.min(0, v.x * up.x + v.y * up.y + v.z * up.z)
+    impulse.copy(up).multiplyScalar((hop.velocity - falling) * mass)
     body.applyImpulse(impulse, true)
+    state.hops++
+    state.hopBuffer = 0
+    state.sinceHop = 0
   }
 
   const v = body.linvel()
@@ -77,8 +114,10 @@ export function stepAbilities(
     state.fuel -= boost.fuelPerSecond * dt
   }
 
+  // Glide floats on the way down; on the way up it gives only a little extra lift.
   const gliding = !grounded && c.hop && state.fuel > 0
-  if (gliding !== state.gliding) body.setGravityScale(gliding ? glide.gravityScale : 1, true)
+  const gravityScale = !gliding ? 1 : vel.y > 0 ? glide.riseGravityScale : glide.gravityScale
+  if (body.gravityScale() !== gravityScale) body.setGravityScale(gravityScale, true)
   state.gliding = gliding
   if (gliding) {
     state.fuel -= glide.fuelPerSecond * dt
@@ -95,29 +134,68 @@ export function stepAbilities(
       vel.set(flatVel.x, vel.y, flatVel.z)
     }
     body.setLinvel(vel, true)
-    steerInAir(body, c, dt)
   }
+  if (!grounded) steerInAir(body, c, dt, gliding ? 1 : airControl.plainFactor, assist, probe)
+  else if (state.landingAssist > 0) settleLanding(body, dt, assist)
 
   if (grounded && !state.boosting) state.fuel += fuel.rechargePerSecond * dt
   state.fuel = MathUtils.clamp(state.fuel, 0, fuel.max)
 }
 
+// The "up" the car levels to in the air: world up, blending to the normal of the ground
+// below as it comes within `groundProbe`, so it lands flat on a ramp.
+function levelNormal(body: RapierRigidBody, { world, ray, flags }: GroundProbe) {
+  level.copy(WORLD_UP)
+  const p = body.translation()
+  ray.origin = { x: p.x, y: p.y, z: p.z }
+  ray.dir = { x: 0, y: -1, z: 0 }
+  const range = airControl.groundProbe
+  const hit = world.castRayAndGetNormal(ray, range, true, flags, undefined, undefined, body)
+  if (hit && hit.normal.y > 0.5) {
+    const near = 1 - hit.timeOfImpact / range
+    level.lerp(groundUp.set(hit.normal.x, hit.normal.y, hit.normal.z), near).normalize()
+  }
+  return level
+}
+
 // Car-local axes: +X left, +Y up, +Z forward. Positive X spin dips the nose, positive
-// Y spin turns left, positive Z spin lifts the left side.
-function steerInAir(body: RapierRigidBody, c: CarControls, dt: number) {
+// Y spin turns left, positive Z spin lifts the left side. `strength` scales the pitch and
+// bank angles and the yaw control (1 gliding, less while plainly airborne); levelling out
+// always runs, at the assist's rate.
+function steerInAir(
+  body: RapierRigidBody,
+  c: CarControls,
+  dt: number,
+  strength: number,
+  assist: Assist,
+  probe: GroundProbe,
+) {
   const turn = -c.steer // positive turns left
   left.set(1, 0, 0).applyQuaternion(quat)
-  const pitch = -Math.asin(MathUtils.clamp(forward.y, -1, 1)) // nose down is positive
-  const roll = Math.asin(MathUtils.clamp(left.y, -1, 1)) // left side up is positive
-  const pitchTarget = c.pitch * airControl.pitchAngle
-  const bank = -turn * airControl.bankAngle // left side down when turning left
+  const n = levelNormal(body, probe)
+  const pitch = -Math.asin(MathUtils.clamp(forward.dot(n), -1, 1)) // nose down is positive
+  const roll = Math.asin(MathUtils.clamp(left.dot(n), -1, 1)) // left side up is positive
+  const pitchTarget = c.pitch * airControl.pitchAngle * strength
+  const bank = -turn * airControl.bankAngle * strength // left side down when turning left
+  const levelRate = airControl.levelRate * assist.airLevel
 
   const w = body.angvel()
   quatInv.copy(quat).invert()
   spin.set(w.x, w.y, w.z).applyQuaternion(quatInv)
   const k = dampFactor(airControl.damping, dt)
-  spin.x += ((pitchTarget - pitch) * airControl.levelRate - spin.x) * k
-  spin.y += (turn * airControl.yawRate - spin.y) * k
-  spin.z += ((bank - roll) * airControl.levelRate - spin.z) * k
+  spin.x += ((pitchTarget - pitch) * levelRate - spin.x) * k
+  spin.y += (turn * airControl.yawRate - spin.y) * dampFactor(airControl.damping * strength, dt)
+  spin.z += ((bank - roll) * levelRate - spin.z) * k
+  body.setAngvel(spin.applyQuaternion(quat), true)
+}
+
+// Just after a landing: damp roll and yaw spin so the car settles instead of bouncing round.
+function settleLanding(body: RapierRigidBody, dt: number, assist: Assist) {
+  const w = body.angvel()
+  quatInv.copy(quat).invert()
+  spin.set(w.x, w.y, w.z).applyQuaternion(quatInv)
+  const k = 1 - dampFactor(landing.spinDamping * assist.landing, dt)
+  spin.y *= k
+  spin.z *= k
   body.setAngvel(spin.applyQuaternion(quat), true)
 }

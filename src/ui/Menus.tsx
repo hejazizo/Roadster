@@ -4,6 +4,7 @@ import { CAR_MODEL_CREDIT } from '../config/assets'
 import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
 import { PAINTS } from '../config/paints'
 import { onPress } from '../input/input'
+import { ASSIST_MODES, useAssistStore } from '../state/assistStore'
 import { useInputStore } from '../state/inputStore'
 import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
@@ -25,7 +26,8 @@ const resume = () => {
 }
 // Silent: also called when the window loses focus.
 const pause = () => useRaceStore.getState().setPaused(true)
-const pickPaint = (change: () => void) => {
+// Paint and assist pickers: a tick, then the change.
+const pick = (change: () => void) => {
   sfx.uiTick()
   change()
 }
@@ -76,7 +78,9 @@ function useMenuInput() {
         if (action === 'confirm') play()
         else if (action === 'back' && screen !== 'main') quit()
         else if (screen === 'main' && (action === 'prev' || action === 'next')) {
-          pickPaint(() => usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1))
+          pick(() => usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1))
+        } else if (screen !== 'results' && action === 'assists') {
+          pick(() => useAssistStore.getState().cycleMode())
         }
       } else if (action === 'restart') {
         play()
@@ -148,9 +152,45 @@ function PaintPicker() {
             className={`menu-swatch${paint.id === paintId ? ' is-selected' : ''}`}
             style={{ background: paint.color }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pickPaint(() => usePaintStore.getState().setPaint(paint.id))}
+            onClick={() => pick(() => usePaintStore.getState().setPaint(paint.id))}
           />
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Assist mode, a segmented pair that never takes focus, like the paint swatches; the
+// keyboard and gamepad switch it with the assists action.
+function AssistPicker() {
+  const mode = useAssistStore((s) => s.mode)
+  const device = useInputStore((s) => s.device)
+  return (
+    <div className="menu-assists">
+      <div className="menu-paint-label">
+        <span className="hud-label">Assists</span>
+        <kbd className="menu-key">{bindingLabel(['assists'], device)}</kbd>
+      </div>
+      <div className="menu-segments" role="radiogroup" aria-label="Assists">
+        {ASSIST_MODES.map(({ id, name }) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={id === mode}
+            tabIndex={-1}
+            className={`menu-segment${id === mode ? ' is-selected' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => pick(() => useAssistStore.getState().setMode(id))}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <div className="menu-assists-hint">
+        {mode === 'beginner'
+          ? 'Steadier drifts, steering and landings'
+          : 'Light help: catch your own slides'}
       </div>
     </div>
   )
@@ -174,6 +214,7 @@ function MainMenu() {
           )}
         </div>
         <PaintPicker />
+        <AssistPicker />
         <div className="menu-buttons">
           <MenuButton primary label="Play" action="confirm" onClick={play} />
         </div>
@@ -218,6 +259,7 @@ function PauseMenu() {
           <MenuButton label="Restart" action="confirm" onClick={play} />
           <MenuButton label="Quit" action="back" onClick={quit} />
         </div>
+        <AssistPicker />
         <SoundSettings />
       </div>
     </div>

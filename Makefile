@@ -1,4 +1,4 @@
-.PHONY: dev down build lint format car-model shell clean
+.PHONY: dev down build lint format car-model sim shell clean
 
 # Build the image and start the dev server on http://localhost:5173
 dev:
@@ -19,6 +19,10 @@ format:
 # Rebuild public/models/car.glb from the source model in assets/
 car-model:
 	docker compose run --rm web npm run model:car
+
+# Headless handling sim: driving, jump and ring checks on the test level
+sim:
+	docker compose run --rm web npm run sim:car
 
 shell:
 	docker compose run --rm web bash

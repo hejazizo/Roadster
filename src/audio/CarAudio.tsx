@@ -115,7 +115,7 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
   // Last-seen state, to play one-shots on changes.
   const seen = useRef({
     boosting: false,
-    hops: telemetry.current.hops,
+    hops: abilities.current.hops,
     landings: telemetry.current.landings,
     respawns: telemetry.current.respawns,
   })
@@ -133,14 +133,14 @@ export default function CarAudio({ body, telemetry, thrust, abilities }: CarAudi
 
   useFrame(() => {
     const t = telemetry.current
-    const { boosting } = abilities.current
+    const { boosting, hops } = abilities.current
     const s = seen.current
     if (boosting && !s.boosting) sfx.boostBurst()
-    if (t.hops !== s.hops) sfx.hop()
+    if (hops !== s.hops) sfx.hop()
     if (t.landings !== s.landings) sfx.landing(t.landingImpact)
     if (t.respawns !== s.respawns) sfx.respawn()
     s.boosting = boosting
-    s.hops = t.hops
+    s.hops = hops
     s.landings = t.landings
     s.respawns = t.respawns
 

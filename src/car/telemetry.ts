@@ -13,7 +13,7 @@ export type WheelTelemetry = {
   normal: Vector3 // world ground normal, valid while in contact
 }
 
-// What the effects, camera and sound read about the car: landings, skids, braking, hops.
+// What the effects, camera and sound read about the car: landings, skids, braking.
 // Stepped with physics after the abilities, so it holds still while the game is paused.
 export type CarTelemetry = {
   speed: number // m/s along the car's forward axis (negative in reverse)
@@ -24,7 +24,6 @@ export type CarTelemetry = {
   landings: number // bumped on every landing, so readers can spot a new one
   landingImpact: number // 0–1 strength of the last landing
   braking: boolean
-  hops: number // bumped on every hop
   respawns: number // bumped on every R or fall, not on a race restart
   wheels: WheelTelemetry[]
 }
@@ -39,7 +38,6 @@ export const createTelemetry = (): CarTelemetry => ({
   landings: 0,
   landingImpact: 0,
   braking: false,
-  hops: 0,
   respawns: 0,
   wheels: TUNING.car.wheels.positions.map(() => ({
     contact: false,
@@ -122,8 +120,6 @@ export function stepTelemetry(
     t.airTime = 0
   }
   t.grounded = grounded
-  // The same wheel contacts and press that make abilities.ts hop.
-  if (c.hopPressed && grounded) t.hops++
 
   // Brake lights: braking against the motion, or the handbrake while rolling.
   const speed = vc.currentVehicleSpeed()
