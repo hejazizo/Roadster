@@ -1,7 +1,7 @@
 import { button, folder, Leva, useControls } from 'leva'
 import { useEffect, useState } from 'react'
 import { TUNING } from '../config/tuning'
-import { isTypingTarget } from './isTypingTarget'
+import { onPress } from '../input/input'
 
 // Sections shown in the panel. Their values are read every physics step or frame, so
 // editing them in place takes effect immediately. Structural values (gravity, chassis,
@@ -19,6 +19,7 @@ const SECTIONS: [string, Record<string, unknown>][] = [
   ['Air control', TUNING.car.airControl],
   ['Respawn', TUNING.car.respawn],
   ['Chase cam', TUNING.camera.chase],
+  ['Input', TUNING.input],
 ]
 
 // Keys are prefixed with the folder because leva needs them unique across folders.
@@ -50,20 +51,19 @@ const schema = Object.fromEntries(
 // Log the current values so tuned numbers can be copied back into tuning.ts.
 const logValues = () => console.log(JSON.stringify(TUNING, null, 2))
 
-// Live tuning panel, hidden until Backquote (`) is pressed.
+// Live tuning panel, hidden until the tuning action (Backquote `) toggles it.
 export default function TuningPanel() {
   const [open, setOpen] = useState(false)
 
   useControls({ ...schema, 'Log values': button(logValues) })
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'Backquote' || e.repeat || isTypingTarget(e)) return
-      setOpen((current) => !current)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  useEffect(
+    () =>
+      onPress((action) => {
+        if (action === 'tuning') setOpen((current) => !current)
+      }),
+    [],
+  )
 
   return <Leva hidden={!open} />
 }

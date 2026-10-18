@@ -1,50 +1,74 @@
 import { useEffect } from 'react'
-import { isRunning, useRaceStore } from '../state/raceStore'
+import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
+import { onPress } from '../input/input'
+import { useInputStore } from '../state/inputStore'
+import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
 import { formatTime } from './formatTime'
-import { isTypingTarget } from './isTypingTarget'
 import './Menus.css'
 
 const play = () => useRaceStore.getState().restart()
 const quit = () => useRaceStore.getState().quit()
 const resume = () => useRaceStore.getState().setPaused(false)
+const pause = () => useRaceStore.getState().setPaused(true)
 
-const CONTROLS: [string, string][] = [
-  ['W / S', 'Drive, brake, reverse'],
-  ['A / D', 'Steer'],
-  ['Shift', 'Boost'],
-  ['Space', 'Hop, hold to glide'],
-  ['E', 'Handbrake'],
-  ['R', 'Back to safe point'],
-  ['Enter', 'Restart'],
-  ['Esc', 'Pause'],
+const CONTROLS: [BindingRef[], string][] = [
+  [
+    [
+      ['throttle', 1],
+      ['throttle', -1],
+    ],
+    'Drive, brake, reverse',
+  ],
+  [
+    [
+      ['steer', -1],
+      ['steer', 1],
+    ],
+    'Steer',
+  ],
+  [['boost'], 'Boost'],
+  [['hop'], 'Hop, hold to glide'],
+  [['handbrake'], 'Handbrake'],
+  [['reset'], 'Back to safe point'],
+  [['restart'], 'Restart'],
+  [['pause'], 'Pause'],
 ]
 
-// Menu keys: Enter (re)starts, Esc pauses/resumes (or leaves the results), Q quits to the
-// main menu. Leaving the tab or window pauses a run. Temporary until the input layer in M8.
-function useMenuKeys() {
+type Screen = 'main' | 'pause' | 'results' | null
+
+const screenOf = (s: RaceState): Screen =>
+  s.phase === 'menu' ? 'main' : s.phase === 'finished' ? 'results' : s.paused ? 'pause' : null
+
+// Menu actions: pause toggles a run (or leaves the results), confirm and back pick the
+// screen's buttons, and restart works during a run. Leaving the tab or window, or
+// unplugging a gamepad, pauses a run.
+function useMenuInput() {
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || isTypingTarget(e)) return
-      // Enter on a focused button already clicks it.
-      if (e.code === 'Enter' && e.target instanceof HTMLButtonElement) return
-      const { phase, paused, setPaused } = useRaceStore.getState()
-      if (e.code === 'Enter') play()
-      else if (e.code === 'Escape' && isRunning(phase)) setPaused(!paused)
-      else if (e.code === 'Escape' && phase === 'finished') quit()
-      else if (e.code === 'KeyQ' && (paused || phase === 'finished')) quit()
-      else return
-      e.preventDefault()
-    }
-    const pause = () => useRaceStore.getState().setPaused(true)
+    const offPress = onPress((action) => {
+      const race = useRaceStore.getState()
+      const screen = screenOf(race)
+      if (action === 'pause') {
+        if (isRunning(race.phase)) race.setPaused(!race.paused)
+        else if (screen === 'results') quit()
+      } else if (screen) {
+        if (action === 'confirm') play()
+        else if (action === 'back' && screen !== 'main') quit()
+      } else if (action === 'restart') {
+        play()
+      }
+    })
+    const offGamepads = useInputStore.subscribe((s, prev) => {
+      if (s.gamepads < prev.gamepads) pause()
+    })
     const onVisibilityChange = () => {
       if (document.hidden) pause()
     }
 
-    window.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', pause)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      offPress()
+      offGamepads()
       window.removeEventListener('blur', pause)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
@@ -53,12 +77,13 @@ function useMenuKeys() {
 
 type MenuButtonProps = {
   label: string
-  keyHint: string
+  action: ButtonAction // shown as the button's key hint
   onClick: () => void
   primary?: boolean
 }
 
-function MenuButton({ label, keyHint, onClick, primary }: MenuButtonProps) {
+function MenuButton({ label, action, onClick, primary }: MenuButtonProps) {
+  const device = useInputStore((s) => s.device)
   return (
     <button
       type="button"
@@ -66,13 +91,14 @@ function MenuButton({ label, keyHint, onClick, primary }: MenuButtonProps) {
       onClick={onClick}
     >
       {label}
-      <kbd className="menu-key">{keyHint}</kbd>
+      <kbd className="menu-key">{bindingLabel([action], device)}</kbd>
     </button>
   )
 }
 
 function MainMenu() {
   const bestTime = useRaceStore((s) => s.bestTime)
+  const device = useInputStore((s) => s.device)
   return (
     <div className="menu">
       <div className="menu-card">
@@ -88,13 +114,13 @@ function MainMenu() {
           )}
         </div>
         <div className="menu-buttons">
-          <MenuButton primary label="Play" keyHint="Enter" onClick={play} />
+          <MenuButton primary label="Play" action="confirm" onClick={play} />
         </div>
         <dl className="menu-controls">
-          {CONTROLS.map(([key, action]) => (
-            <div key={key}>
-              <dt>{key}</dt>
-              <dd>{action}</dd>
+          {CONTROLS.map(([refs, description]) => (
+            <div key={description}>
+              <dt>{bindingLabel(refs, device)}</dt>
+              <dd>{description}</dd>
             </div>
           ))}
         </dl>
@@ -109,9 +135,9 @@ function PauseMenu() {
       <div className="menu-card">
         <h2 className="menu-heading">Paused</h2>
         <div className="menu-buttons">
-          <MenuButton primary label="Resume" keyHint="Esc" onClick={resume} />
-          <MenuButton label="Restart" keyHint="Enter" onClick={play} />
-          <MenuButton label="Quit" keyHint="Q" onClick={quit} />
+          <MenuButton primary label="Resume" action="pause" onClick={resume} />
+          <MenuButton label="Restart" action="confirm" onClick={play} />
+          <MenuButton label="Quit" action="back" onClick={quit} />
         </div>
       </div>
     </div>
@@ -139,8 +165,8 @@ function Results() {
           )}
         </div>
         <div className="menu-buttons">
-          <MenuButton primary label="Retry" keyHint="Enter" onClick={play} />
-          <MenuButton label="Menu" keyHint="Esc" onClick={quit} />
+          <MenuButton primary label="Retry" action="confirm" onClick={play} />
+          <MenuButton label="Menu" action="back" onClick={quit} />
         </div>
       </div>
     </div>
@@ -150,10 +176,8 @@ function Results() {
 // Main menu, pause menu and results screen over the canvas. Each screen unmounts when its
 // buttons are used, so no button keeps focus (Space would click it again).
 export default function Menus() {
-  useMenuKeys()
-  const screen = useRaceStore((s) =>
-    s.phase === 'menu' ? 'main' : s.phase === 'finished' ? 'results' : s.paused ? 'pause' : null,
-  )
+  useMenuInput()
+  const screen = useRaceStore(screenOf)
   if (screen === 'main') return <MainMenu />
   if (screen === 'pause') return <PauseMenu />
   if (screen === 'results') return <Results />

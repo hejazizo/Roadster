@@ -60,10 +60,9 @@ type CarProps = {
 
 export default function Car({ ref, visualRef }: CarProps) {
   const { world, rapier } = useRapier()
-  const controls = useCarControls()
+  const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
   const steer = useRef(0)
-  const resetHeld = useRef(false)
   const runId = useRef(useRaceStore.getState().runId)
   const abilities = useRef(createAbilityState())
   const safePoint = useRef(createSafePoint())
@@ -103,7 +102,9 @@ export default function Car({ ref, visualRef }: CarProps) {
     const body = ref.current
     if (!vc || !body || !ray.current) return
     const race = useRaceStore.getState()
-    const c = race.phase === 'racing' ? controls.current : isCarHeld(race.phase) ? HELD : COASTING
+    // Read every step, so presses made on a menu or during the countdown don't carry over.
+    const input = readControls()
+    const c = race.phase === 'racing' ? input : isCarHeld(race.phase) ? HELD : COASTING
 
     // A race restart forgets the safe point, so the car goes back to spawn.
     const restarted = race.runId !== runId.current
@@ -112,28 +113,30 @@ export default function Car({ ref, visualRef }: CarProps) {
 
     // R or falling out of the world puts the car back at its last safe point.
     const fell = body.translation().y < TUNING.world.killY
-    if (restarted || (c.reset && !resetHeld.current) || fell) {
+    if (restarted || c.reset || fell) {
       placeAtSafePoint(safePoint.current, body)
       steer.current = 0
       resetAbilities(abilities.current, body)
     }
-    resetHeld.current = c.reset
 
+    // Analog throttle: forces scale with how far the trigger (or key, fully) is pressed.
     const speed = vc.currentVehicleSpeed()
     const { stopSpeed } = TUNING.car
+    const t = c.throttle
     let engineForce = 0
     let brakeForce = 0
-    if (c.forward) {
-      if (speed < -stopSpeed) brakeForce = brake.force
-      else if (speed < engine.maxSpeed) engineForce = engine.force
-    } else if (c.backward) {
-      if (speed > stopSpeed) brakeForce = brake.force
-      else if (speed > -engine.maxReverseSpeed) engineForce = -engine.reverseForce
+    if (t > 0) {
+      if (speed < -stopSpeed) brakeForce = brake.force * t
+      else if (speed < engine.maxSpeed) engineForce = engine.force * t
+    } else if (t < 0) {
+      if (speed > stopSpeed) brakeForce = brake.force * -t
+      else if (speed > -engine.maxReverseSpeed) engineForce = engine.reverseForce * t
     } else {
       brakeForce = brake.idleBrake
     }
 
-    const steerTarget = (Number(c.left) - Number(c.right)) * steering.maxAngle
+    // Positive steering angle turns left.
+    const steerTarget = -c.steer * steering.maxAngle
     const maxDelta = steering.speed * world.timestep
     steer.current += MathUtils.clamp(steerTarget - steer.current, -maxDelta, maxDelta)
 

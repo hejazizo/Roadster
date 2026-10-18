@@ -12,7 +12,6 @@ export type VehicleController = ReturnType<
 export type AbilityState = {
   fuel: number
   grounded: boolean
-  hopHeld: boolean // hop key was down last step, so a hop needs a fresh press
   boosting: boolean
   gliding: boolean
 }
@@ -20,7 +19,6 @@ export type AbilityState = {
 export const createAbilityState = (): AbilityState => ({
   fuel: fuel.max,
   grounded: false,
-  hopHeld: false,
   boosting: false,
   gliding: false,
 })
@@ -64,11 +62,10 @@ export function stepAbilities(
   for (let i = 0; i < vc.numWheels(); i++) grounded ||= vc.wheelIsInContact(i)
   state.grounded = grounded
 
-  if (c.hop && !state.hopHeld && grounded) {
+  if (c.hopPressed && grounded) {
     impulse.copy(up).multiplyScalar(hop.velocity * mass)
     body.applyImpulse(impulse, true)
   }
-  state.hopHeld = c.hop
 
   const v = body.linvel()
   vel.set(v.x, v.y, v.z)
@@ -108,11 +105,11 @@ export function stepAbilities(
 // Car-local axes: +X left, +Y up, +Z forward. Positive X spin dips the nose, positive
 // Y spin turns left, positive Z spin lifts the left side.
 function steerInAir(body: RapierRigidBody, c: CarControls, dt: number) {
-  const turn = Number(c.left) - Number(c.right)
+  const turn = -c.steer // positive turns left
   left.set(1, 0, 0).applyQuaternion(quat)
   const pitch = -Math.asin(MathUtils.clamp(forward.y, -1, 1)) // nose down is positive
   const roll = Math.asin(MathUtils.clamp(left.y, -1, 1)) // left side up is positive
-  const pitchTarget = (Number(c.forward) - Number(c.backward)) * airControl.pitchAngle
+  const pitchTarget = c.pitch * airControl.pitchAngle
   const bank = -turn * airControl.bankAngle // left side down when turning left
 
   const w = body.angvel()

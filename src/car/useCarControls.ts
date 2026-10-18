@@ -1,72 +1,54 @@
-import { useEffect, useRef } from 'react'
-import { isTypingTarget } from '../ui/isTypingTarget'
+import { useCallback, useEffect, useRef } from 'react'
+import { axis, held, onPress } from '../input/input'
 
 export type CarControls = {
-  forward: boolean
-  backward: boolean
-  left: boolean
-  right: boolean
-  handbrake: boolean
+  throttle: number // -1 brake / reverse … 1 drive
+  steer: number // -1 left … 1 right
+  pitch: number // air control: -1 nose up … 1 nose down
   boost: boolean
-  hop: boolean
-  reset: boolean
-}
-
-const KEY_MAP: Record<string, keyof CarControls> = {
-  KeyW: 'forward',
-  ArrowUp: 'forward',
-  KeyS: 'backward',
-  ArrowDown: 'backward',
-  KeyA: 'left',
-  ArrowLeft: 'left',
-  KeyD: 'right',
-  ArrowRight: 'right',
-  KeyE: 'handbrake',
-  ShiftLeft: 'boost',
-  ShiftRight: 'boost',
-  Space: 'hop',
-  KeyR: 'reset',
+  hop: boolean // held: glide
+  hopPressed: boolean // pressed since the last step: hop
+  handbrake: boolean
+  reset: boolean // pressed since the last step
 }
 
 export const released = (): CarControls => ({
-  forward: false,
-  backward: false,
-  left: false,
-  right: false,
-  handbrake: false,
+  throttle: 0,
+  steer: 0,
+  pitch: 0,
   boost: false,
   hop: false,
+  hopPressed: false,
+  handbrake: false,
   reset: false,
 })
 
-// Keyboard state for the car, kept in a ref so reading it never re-renders.
-// Temporary until the input layer in M8.
+// The car's view of the input layer. Presses are latched until the next physics step
+// reads them, so a tap shorter than one step still counts. Returns a function to call
+// once per step, which takes the latched presses.
 export function useCarControls() {
-  const controls = useRef<CarControls>(released())
+  const latched = useRef({ hop: false, reset: false })
 
-  useEffect(() => {
-    const set = (pressed: boolean) => (e: KeyboardEvent) => {
-      const action = KEY_MAP[e.code]
-      // Ignore presses while typing in a text field; releases still go through.
-      if (!action || (pressed && isTypingTarget(e))) return
-      e.preventDefault()
-      controls.current[action] = pressed
-    }
-    const onKeyDown = set(true)
-    const onKeyUp = set(false)
-    const onBlur = () => {
-      controls.current = released()
-    }
+  useEffect(
+    () =>
+      onPress((action) => {
+        if (action === 'hop' || action === 'reset') latched.current[action] = true
+      }),
+    [],
+  )
 
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
+  return useCallback((): CarControls => {
+    const { hop, reset } = latched.current
+    latched.current = { hop: false, reset: false }
+    return {
+      throttle: axis('throttle'),
+      steer: axis('steer'),
+      pitch: axis('pitch'),
+      boost: held('boost'),
+      hop: held('hop'),
+      hopPressed: hop,
+      handbrake: held('handbrake'),
+      reset,
     }
   }, [])
-
-  return controls
 }

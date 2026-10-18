@@ -80,7 +80,8 @@ export const TUNING = {
       headingAlign: 1.5, // 1/s, how quickly horizontal velocity turns to follow the car's heading
       fuelPerSecond: 0.25,
     },
-    // Light air control while gliding: W/S tilt the nose, A/D yaw and bank into the turn.
+    // Light air control while gliding: pitch (W/S, stick Y) tilts the nose, steer yaws and banks
+    // into the turn; analog input scales the angles and rates.
     // Pitch and roll hold an angle and level out on release, so the car can't be flipped.
     airControl: {
       pitchAngle: 0.4, // rad nose down (W) or up (S)
@@ -98,6 +99,11 @@ export const TUNING = {
       flatTolerance: 0.4, // m the ground under each edge probe may differ from under the car
       lift: 0.3, // m above the recorded pose to respawn at
     },
+  },
+  input: {
+    stickDeadzone: 0.15, // stick tilt (0–1) ignored around the centre
+    triggerDeadzone: 0.05, // trigger travel (0–1) ignored at rest
+    buttonThreshold: 0.5, // a gamepad button counts as down above this value
   },
   race: {
     countdown: 3, // s from restart to go; the car is held until then

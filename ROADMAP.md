@@ -25,7 +25,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 5   | Greybox test world             | 1 · Core    | ☑      |
 | 6   | Ring time-trial loop           | 2 · Game    | ☑      |
 | 7   | Menus & saved best times       | 2 · Game    | ☑      |
-| 8   | Input mapping & gamepad        | 2 · Game    | ☐      |
+| 8   | Input mapping & gamepad        | 2 · Game    | ☑      |
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☐      |
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☐      |
 | 11  | Hero Roadster model            | 3 · Details | ☐      |
@@ -144,6 +144,8 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 **Done when:** a full run can be done on keyboard or gamepad with no code paths reading raw input.
 
+✅ **Done:** `src/input/input.ts` maps keyboard and every connected standard-mapping gamepad to the actions in `src/config/bindings.ts` (`axis` / `held` / `onPress`, gamepads polled on their own animation-frame loop so menus work while physics is paused); pad layout RT/LT throttle and brake (analog), left stick steer and air pitch, A hop/glide, B boost, X handbrake, Y reset, Menu pause, View restart, A/B confirm/back on menus; the car, menus, camera toggle and tuning panel read only actions, the car latches hop/reset presses per physics step and drains them in menus and the countdown; throttle, steer and air control are analog; menu hints and the controls list follow the last-used device; unplugging a pad pauses the run; deadzones in `TUNING.input`. Checked in headless Chrome with a scripted gamepad: every action on both devices, sub-step R tap, partial trigger, deadzone, no hop carried from the menu A press, unplug pause.
+
 ### M9 — Placeholder car model (GLB)
 
 - Set up the asset pipeline using a free low-poly car (CC0) or a quick Blender blockout.
@@ -256,8 +258,7 @@ Park later ideas here instead of building them early.
 - Day/night cycle and weather
 - Bundle is ~3.4 MB (1.2 MB gzip), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
 - Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
-- A reset tap shorter than one physics step (~16 ms) can be missed because controls are sampled per step; latch presses in the M8 input layer.
-- Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M8 input layer or M15.
+- Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M15. Hop presses are latched for one physics step now; a buffer would keep them a little longer.
 - Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
 - leva adds ~0.2 MB to the bundle and ships in production builds; make the tuning panel dev-only or lazy-load it in M10.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
@@ -266,3 +267,6 @@ Park later ideas here instead of building them early.
 - The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
+- Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons), rumble on landing and boost (M13/M15), and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data.
+- A press latched while the pause menu is up (e.g. Y) still fires on resume; clear the car's latches on pause if it ever matters.
+- Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
