@@ -4,8 +4,9 @@ import type { Mesh } from 'three'
 import CameraRig from '../camera/CameraRig'
 import Car from '../car/Car'
 import { TUNING } from '../config/tuning'
-import Ground from './Ground'
+import Level from './Level'
 import Lights from './Lights'
+import { TEST_LEVEL } from './testLevel'
 
 const SKY_COLOR = '#87ceeb'
 
@@ -20,11 +21,12 @@ export default function World() {
       <Suspense fallback={null}>
         {/* Step physics before other frame callbacks so the camera reads this frame's car pose. */}
         <Physics gravity={TUNING.world.gravity} updatePriority={-1}>
-          <Ground />
+          <Level level={TEST_LEVEL} />
           <Car ref={carRef} visualRef={carVisualRef} />
+          {/* Inside Physics so the chase cam can raycast against the level. */}
+          <CameraRig target={carVisualRef} body={carRef} />
         </Physics>
       </Suspense>
-      <CameraRig target={carVisualRef} body={carRef} />
     </>
   )
 }

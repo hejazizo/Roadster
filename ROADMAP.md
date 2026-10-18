@@ -22,7 +22,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 2   | Chase camera                   | 1 · Core    | ☑      |
 | 3   | Boost, hop & glide             | 1 · Core    | ☑      |
 | 4   | Basic HUD                      | 1 · Core    | ☑      |
-| 5   | Greybox test world             | 1 · Core    | ☐      |
+| 5   | Greybox test world             | 1 · Core    | ☑      |
 | 6   | Ring time-trial loop           | 2 · Game    | ☐      |
 | 7   | Menus & saved best times       | 2 · Game    | ☐      |
 | 8   | Input mapping & gamepad        | 2 · Game    | ☐      |
@@ -108,6 +108,8 @@ The signature mechanic. Arcade physics, not real aerodynamics.
 - Out-of-bounds / fall detection → respawn at last safe point.
 
 **Done when:** every mechanic from M1–M3 has a place to be exercised, and falling off never softlocks the game.
+
+✅ **Done:** layout as data in `src/scene/testLevel.ts`, rendered by `src/scene/Level.tsx` (box slabs/platforms/walls, convex-hull wedge ramps, drei grid, visual-only circuit road): main island with kicker field, hop barriers, walled chicane alley, 2/4/7 m platform tower with a raised 8 m gap, and an L-shaped north island across a 20 m jump gap (kickers both ways) and an 80 m glide gap. `src/car/respawn.ts` records the last safe pose (all wheels down, upright, level ground 4 m around) and both falls below `world.killY` and R return there (spawn until one exists). Chase cam now raycasts for its ground clamp and pulls in in front of walls. Headless Rapier sim: kicker ≈ 34 m air, hop at 30 m/s clears 20 m, boost + hop without glide falls short of 80 m, hop + glide ≈ 123 m.
 
 ---
 
@@ -250,11 +252,12 @@ Park later ideas here instead of building them early.
 - Day/night cycle and weather
 - Bundle is ~3.4 MB (1.2 MB gzip), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
 - Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
-- Chase cam ground clamp assumes flat ground at y = 0; switch to a downward raycast when M5 adds platforms and ramps.
-- The chase cam can pass through walls between it and the car; add an obstruction raycast when M5 adds walls (or in M15).
 - A reset tap shorter than one physics step (~16 ms) can be missed because controls are sampled per step; latch presses in the M8 input layer.
 - Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M8 input layer or M15.
-- There is no gap to glide over until M5; check gap widths and ramp heights against glide distance there (hop + full glide at 43 m/s covers ~245 m on flat ground).
 - Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
 - leva adds ~0.2 MB to the bundle and ships in production builds; make the tuning panel dev-only or lazy-load it in M10.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
+- Respawn faces the way the car was heading, so after driving off an edge it faces the drop 4 m back; holding W drives straight off again. Consider facing away from the nearest edge, or a short input lockout — M15.
+- The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M15/M16).
+- A hold-R (or menu) "back to spawn" alongside R → last safe point, once M6/M7 add restart.
+- The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.

@@ -8,6 +8,7 @@ type Vec3 = [number, number, number]
 export const TUNING = {
   world: {
     gravity: [0, -9.81, 0] as Vec3,
+    killY: -15, // m, falling below this respawns the car at its last safe point
   },
   car: {
     // Car-local axes: +Z is forward (Rapier's vehicle forward axis), +Y up, +X left.
@@ -88,6 +89,15 @@ export const TUNING = {
       yawRate: 1.5, // rad/s
       damping: 4, // 1/s, how quickly spin follows the input
     },
+    // Respawn point after a fall or R: the last pose that was upright, on all four
+    // wheels and away from edges for a moment. Falls back to spawn until one is recorded.
+    respawn: {
+      minSafeTime: 0.5, // s a pose must stay safe before it's recorded (skips landing bounces)
+      minUpright: 0.97, // car up-axis Y at least this (≈ 14° tilt)
+      edgeMargin: 4, // m of level ground needed ahead, behind and to each side
+      flatTolerance: 0.4, // m the ground under each edge probe may differ from under the car
+      lift: 0.3, // m above the recorded pose to respawn at
+    },
   },
   camera: {
     chase: {
@@ -101,7 +111,8 @@ export const TUNING = {
       positionDamping: 6,
       headingDamping: 4,
       lookDamping: 10,
-      minHeight: 0.5, // m, camera never goes below this (ground is y = 0)
+      minHeight: 0.5, // m above the surface below the camera
+      obstructionMargin: 0.3, // m the camera stays in front of a wall between it and the car
       snapDistance: 10, // m the car moves in one frame (reset/respawn) that snaps the camera
     },
   },

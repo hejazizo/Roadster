@@ -7,14 +7,7 @@ import {
   type RapierRigidBody,
 } from '@react-three/rapier'
 import { useEffect, useRef, type RefObject } from 'react'
-import {
-  MathUtils,
-  Quaternion,
-  Vector3,
-  type Group,
-  type Mesh,
-  type MeshStandardMaterial,
-} from 'three'
+import { MathUtils, type Group, type Mesh, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
 import {
@@ -23,6 +16,7 @@ import {
   stepAbilities,
   type VehicleController,
 } from './abilities'
+import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
 import { useCarControls } from './useCarControls'
 
 const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
@@ -35,7 +29,6 @@ const THRUSTER_COLOR = '#333333'
 const THRUSTER_GLOW = '#ff8c1a'
 const THRUSTER_GLOW_INTENSITY = 3
 
-const SPAWN_ROTATION = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), spawn.yaw)
 const [hx, hy, hz] = chassis.halfExtents
 
 const isFront = (i: number) => i < 2
@@ -59,12 +52,14 @@ type CarProps = {
 }
 
 export default function Car({ ref, visualRef }: CarProps) {
-  const { world } = useRapier()
+  const { world, rapier } = useRapier()
   const controls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
   const steer = useRef(0)
   const resetHeld = useRef(false)
   const abilities = useRef(createAbilityState())
+  const safePoint = useRef(createSafePoint())
+  const ray = useRef<Ray | null>(null)
   const thruster = useRef<MeshStandardMaterial>(null)
   const steerGroups = useRef<(Group | null)[]>([])
   const spinGroups = useRef<(Group | null)[]>([])
@@ -86,25 +81,25 @@ export default function Car({ ref, visualRef }: CarProps) {
       )
     })
     vehicle.current = vc
+    ray.current = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 })
 
     return () => {
       vehicle.current = null
+      ray.current = null
       world.removeVehicleController(vc)
     }
-  }, [world, ref])
+  }, [world, rapier, ref])
 
   useBeforePhysicsStep((world) => {
     const vc = vehicle.current
     const body = ref.current
-    if (!vc || !body) return
+    if (!vc || !body || !ray.current) return
     const c = controls.current
 
-    if (c.reset && !resetHeld.current) {
-      const [x, y, z] = spawn.position
-      body.setTranslation({ x, y, z }, true)
-      body.setRotation(SPAWN_ROTATION, true)
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    // R or falling out of the world puts the car back at its last safe point.
+    const fell = body.translation().y < TUNING.world.killY
+    if ((c.reset && !resetHeld.current) || fell) {
+      placeAtSafePoint(safePoint.current, body)
       steer.current = 0
       resetAbilities(abilities.current, body)
     }
@@ -137,6 +132,7 @@ export default function Car({ ref, visualRef }: CarProps) {
     }
     vc.updateVehicle(world.timestep)
     stepAbilities(abilities.current, body, vc, c, world.timestep)
+    stepSafePoint(safePoint.current, body, vc, world, ray.current, world.timestep)
   })
 
   // Visual wheels follow the controller's suspension, steering and spin.
