@@ -38,7 +38,7 @@ Local Node (alternative):
 - `state/` — Zustand stores
 - `config/` — `tuning.ts`, `bindings.ts` and other config
 
-Outside `src/`: `public/models/` holds the runtime GLBs, `assets/` the source models they're built from, `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain) and `performance.md` (the FPS / draw-call baseline).
+Outside `src/`: `public/models/` holds the runtime GLBs, `public/hdri/` the sky HDRI, `assets/` the source models they're built from, `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain) and `performance.md` (the FPS / draw-call baseline).
 
 ## Rules
 

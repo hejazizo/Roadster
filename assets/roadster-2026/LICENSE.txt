@@ -12,8 +12,9 @@ source.glb is the original file, unchanged.
 Modified for Roadster: public/models/car.glb is built from it by scripts/build-car-model.ts.
 The build decimates the mesh (500k to about 140k triangles), rebuilds all four wheels from
 one rear wheel (the fused front wheels are cut out of the body and dark arch liners added),
-moves the texture from the emissive to the base colour slot, rescales and re-centres the car,
-and compresses the geometry (Meshopt) and texture (WebP).
+splits the single material into paint, glass, carbon trim, tail lights, tyres and rims (the
+paint drawn from a recolourable grey version of the texture), adds a front light bar,
+rescales and re-centres the car, and compresses the geometry (Meshopt) and textures (WebP).
 
 CC BY 4.0 covers the modeller's copyright only. It grants no rights to any trademark or
 design of the car it depicts; the game does not use the "Tesla" name or logos.

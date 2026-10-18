@@ -74,6 +74,44 @@
   text-transform: uppercase;
 }
 
+.menu-paint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+}
+
+.menu-paint-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.menu-swatches {
+  display: flex;
+  justify-content: space-between;
+}
+
+.menu-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.menu-swatch:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.menu-swatch.is-selected {
+  border-color: #ffd60a;
+  box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.35);
+}
+
 .menu-buttons {
   display: flex;
   flex-direction: column;

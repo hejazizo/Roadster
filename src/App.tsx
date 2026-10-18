@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { NeutralToneMapping } from 'three'
 import { onPress, useInputDevices } from './input/input'
 import World from './scene/World'
 import Hud from './ui/Hud'
@@ -26,7 +27,12 @@ export default function App() {
   const tuningOpen = useTuningToggle()
   return (
     <>
-      <Canvas shadows="percentage" camera={{ position: [0, 12, 22], fov: 50 }}>
+      {/* Neutral tone mapping keeps paint colours and the greybox's saturation truer than ACES. */}
+      <Canvas
+        shadows="percentage"
+        camera={{ position: [0, 12, 22], fov: 50 }}
+        gl={{ toneMapping: NeutralToneMapping }}
+      >
         <World />
       </Canvas>
       <Hud />

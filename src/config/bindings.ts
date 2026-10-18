@@ -12,6 +12,8 @@ export type ButtonAction =
   | 'restart' // during a run
   | 'confirm' // on a menu screen
   | 'back' // on a menu screen
+  | 'prev' // previous option on a menu screen (paint)
+  | 'next' // next option on a menu screen
   | 'camera' // debug orbit cam
   | 'tuning' // debug tuning panel
 
@@ -39,6 +41,8 @@ const LT = 6
 const RT = 7
 const VIEW = 8
 const MENU = 9
+const DPAD_LEFT = 14
+const DPAD_RIGHT = 15
 
 export const BINDINGS: {
   axes: Record<AxisAction, AxisBinding>
@@ -73,6 +77,8 @@ export const BINDINGS: {
     restart: { keys: ['Enter'], pad: [VIEW] },
     confirm: { keys: ['Enter'], pad: [A] },
     back: { keys: ['KeyQ'], pad: [B] },
+    prev: { keys: ['ArrowLeft', 'KeyA'], pad: [DPAD_LEFT] },
+    next: { keys: ['ArrowRight', 'KeyD'], pad: [DPAD_RIGHT] },
     camera: { keys: ['KeyC'], pad: [] },
     tuning: { keys: ['Backquote'], pad: [] },
   },
@@ -89,7 +95,11 @@ const KEY_LABELS: Record<string, string> = {
   ArrowRight: '→',
 }
 
-const PAD_BUTTON_LABELS = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'LS', 'RS']
+// prettier-ignore
+const PAD_BUTTON_LABELS = [
+  'A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'LS', 'RS', 'D-pad ↑', 'D-pad ↓',
+  'D-pad ←', 'D-pad →',
+]
 const PAD_STICK_LABELS = ['Left stick', 'Left stick', 'Right stick', 'Right stick']
 
 const keyLabel = (code: string) => KEY_LABELS[code] ?? code.replace(/^(Key|Digit)/, '')

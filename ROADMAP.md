@@ -29,7 +29,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☑      |
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☑      |
 | 11  | Hero Roadster model            | 3 · Details | ☑      |
-| 12  | Lighting & materials           | 3 · Details | ☐      |
+| 12  | Lighting & materials           | 3 · Details | ☑      |
 | 13  | Thruster VFX & post-processing | 3 · Details | ☐      |
 | 14  | Audio                          | 3 · Details | ☐      |
 | 15  | Handling & flight polish       | 3 · Details | ☐      |
@@ -218,6 +218,8 @@ Each milestone here is independent enough to do in any order, apart from M11 →
 
 **Done when:** the car looks premium in screenshots from the chase cam.
 
+✅ **Done:** `scripts/build-car-model.ts` splits the hero car into materials after simplifying: each triangle is sorted by the baked texel under its UV centroid and its position (thresholds measured on rendered views of the source) into `paint`, `glass` (dark above the beltline, opaque and glossy), `carbon` (dark below it: a generated twill weave on box-projected UVs, clearcoat) and `tail_light` (the red rear strip, emissive from the texture); wheels split into `tyre`/`rim` by radius. The source has no head lights, so a `head_light` LED bar is added across the fascia, ray-cast onto the surface. Paint is a grey shade map (texture luminance, flattened) × colour, clearcoat via `KHR_materials_clearcoat`; car.glb 1.76 MB, same bytes on host and Docker. Six paints in `src/config/paints.ts`, picked on the main menu (swatches, ←/→ or A/D, d-pad; new `prev`/`next` actions), saved in localStorage (`src/state/paintStore.ts`); `CarModel.tsx` recolours a clone of the `paint` material. Poly Haven CC0 sky HDRI (1k, its sun within 5° of ours) via drei `<Environment>` replaces the ambient light; Neutral tone mapping (truer paint and greybox colours than ACES); the sun is the only shadow caster, its box ±15 m with near/far, bias and normal bias, and texel-snapped so edges don't shimmer; the car receives shadows. Headless Chrome: every paint from chase and orbit cams, 16 paint-picker checks (persistence, garbage storage, keys, scripted pad, no swatch focus, ignored outside the main menu), 60 fps also with CPU 4× throttle, 53 avg / 61 max draw calls (+16 from the car's materials), first load ~3.6 MB gzipped (`docs/performance.md`).
+
 ### M13 — Thruster VFX & post-processing
 
 - Thruster flame and heat particles at the nozzle nodes; intensity tied to boost/glide.
@@ -301,6 +303,10 @@ Park later ideas here instead of building them early.
 - The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M15/M16).
 - The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
 - The placeholder thruster discs (0.15 m, dark when off) are bigger than the hero car's exhaust vents and cover them; M13's VFX should size the effect to the nozzles.
-- The front arch liners are flat dark geometry and the wheel arches have no real inner detail; the baked texture also carries its own lighting — both M12 material work.
+- The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16/M19 if it matters).
 - The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.
-- The hero model (M11) ships with one material and one baked texture, so M12's clearcoat paint, glass and emissive lights need it split into separate materials first, by texture region or by mesh selection in the build script. Paint-colour choice (M12/M17) also needs the paint isolated from the baked texture, for example with a mask.
+- M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
+- Brake lights: the tail lights could brighten while braking (emissive strength from the throttle axis) — M13 with the bloom, or M15.
+- The sky HDRI is only used for lighting and reflections; the background is still the flat sky colour. Use it (or a matching skybox) as the background with the real level art — M16. Its sun is within 5° of `SUN_OFFSET`; keep them together.
+- The main menu card covers most of the car at spawn, so a paint change shows only on its rear. A garage/showroom view (camera orbiting the car beside the menu) would show it off — M17 with the level select, or M19.
+- Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16).

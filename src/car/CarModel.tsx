@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei'
-import { useMemo, type RefObject } from 'react'
+import { useLayoutEffect, useMemo, type RefObject } from 'react'
 import {
   DoubleSide,
   Quaternion,
@@ -11,12 +11,15 @@ import {
 } from 'three'
 import { CAR_MODEL_URL } from '../config/assets'
 import { TUNING } from '../config/tuning'
+import { paintColor, usePaintStore } from '../state/paintStore'
 
 const { wheels, suspension } = TUNING.car
 
 // Node names from docs/car-model-spec.md. Wheels are in the order of TUNING.car.wheels.positions.
 const WHEEL_NODES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']
 const THRUSTER_PREFIX = 'thruster'
+// The recolourable material (optional): its base colour is set from the chosen paint.
+const PAINT_MATERIAL = 'paint'
 // Dev check: wheel hubs further than this (m) from the physics wheels get a warning.
 const HUB_TOLERANCE = 0.05
 
@@ -33,6 +36,7 @@ type CarParts = {
   body: Object3D
   wheels: (Object3D | undefined)[]
   thrusters: Pose[]
+  paint: MeshStandardMaterial | null
 }
 
 // Warns about a model that breaks the spec, so a swapped-in model fails loudly in dev.
@@ -51,8 +55,17 @@ function checkWheel(name: string, node: Object3D | undefined, root: Object3D, i:
 
 function splitModel(scene: Group): CarParts {
   const root = scene.clone()
+  // The clone shares materials with the loader's cache, so the paint gets its own copy.
+  let paint: MeshStandardMaterial | null = null
   root.traverse((o) => {
-    if ((o as Mesh).isMesh) o.castShadow = true
+    const mesh = o as Mesh
+    if (!mesh.isMesh) return
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    if ((mesh.material as MeshStandardMaterial).name === PAINT_MATERIAL) {
+      paint ??= (mesh.material as MeshStandardMaterial).clone()
+      mesh.material = paint
+    }
   })
   root.updateMatrixWorld(true)
 
@@ -73,7 +86,7 @@ function splitModel(scene: Group): CarParts {
     return node
   })
 
-  return { body: root, wheels: wheelNodes, thrusters }
+  return { body: root, wheels: wheelNodes, thrusters, paint }
 }
 
 type CarModelProps = {
@@ -86,6 +99,10 @@ type CarModelProps = {
 export default function CarModel({ steerGroups, spinGroups, thrusterMaterials }: CarModelProps) {
   const { scene } = useGLTF(CAR_MODEL_URL)
   const parts = useMemo(() => splitModel(scene), [scene])
+  const paintId = usePaintStore((s) => s.paintId)
+  useLayoutEffect(() => {
+    parts.paint?.color.set(paintColor(paintId))
+  }, [parts, paintId])
 
   return (
     <>

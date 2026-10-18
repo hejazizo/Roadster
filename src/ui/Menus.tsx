@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { CAR_MODEL_CREDIT } from '../config/assets'
 import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
+import { PAINTS } from '../config/paints'
 import { onPress } from '../input/input'
 import { useInputStore } from '../state/inputStore'
+import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
 import { formatTime } from './formatTime'
 import './Menus.css'
@@ -54,6 +56,9 @@ function useMenuInput() {
       } else if (screen) {
         if (action === 'confirm') play()
         else if (action === 'back' && screen !== 'main') quit()
+        else if (screen === 'main' && (action === 'prev' || action === 'next')) {
+          usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1)
+        }
       } else if (action === 'restart') {
         play()
       }
@@ -97,6 +102,41 @@ function MenuButton({ label, action, onClick, primary }: MenuButtonProps) {
   )
 }
 
+// Paint swatches. They never take focus (no tab stop, no focus on click), so Enter and Space
+// keep going to the menu's actions; the keyboard and gamepad cycle paints with prev / next.
+function PaintPicker() {
+  const paintId = usePaintStore((s) => s.paintId)
+  const device = useInputStore((s) => s.device)
+  const current = PAINTS.find((p) => p.id === paintId) ?? PAINTS[0]
+  return (
+    <div className="menu-paint">
+      <div className="menu-paint-label">
+        <span>
+          <span className="hud-label">Paint</span> {current.name}
+        </span>
+        <kbd className="menu-key">{bindingLabel(['prev', 'next'], device)}</kbd>
+      </div>
+      <div className="menu-swatches" role="radiogroup" aria-label="Paint">
+        {PAINTS.map((paint) => (
+          <button
+            key={paint.id}
+            type="button"
+            role="radio"
+            aria-checked={paint.id === paintId}
+            aria-label={paint.name}
+            title={paint.name}
+            tabIndex={-1}
+            className={`menu-swatch${paint.id === paintId ? ' is-selected' : ''}`}
+            style={{ background: paint.color }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => usePaintStore.getState().setPaint(paint.id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MainMenu() {
   const bestTime = useRaceStore((s) => s.bestTime)
   const device = useInputStore((s) => s.device)
@@ -114,6 +154,7 @@ function MainMenu() {
             </>
           )}
         </div>
+        <PaintPicker />
         <div className="menu-buttons">
           <MenuButton primary label="Play" action="confirm" onClick={play} />
         </div>
