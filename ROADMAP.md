@@ -18,7 +18,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | #   | Milestone                      | Phase       | Status |
 | --- | ------------------------------ | ----------- | ------ |
 | 0   | Project scaffold               | 1 · Core    | ☑      |
-| 1   | Drivable box car               | 1 · Core    | ☐      |
+| 1   | Drivable box car               | 1 · Core    | ☑      |
 | 2   | Chase camera                   | 1 · Core    | ☐      |
 | 3   | Boost, hop & glide             | 1 · Core    | ☐      |
 | 4   | Basic HUD                      | 1 · Core    | ☐      |
@@ -64,6 +64,8 @@ Goal: a box that drives, flies a little, and feels good. No art, no menus.
 - Basic values in `tuning.ts` (engine force, brake force, steer angle, suspension).
 
 **Done when:** you can drive around, turn, stop, reverse, and recover from flipping with R.
+
+✅ **Done:** Rapier `DynamicRayCastVehicleController` in `src/car/Car.tsx` (RWD, car-local +Z forward, spawn yawed to face away from the camera); keyboard hook in `src/car/useCarControls.ts`; all values in `TUNING.car`; temporary fixed look-at camera in `src/camera/LookAtCar.tsx`.
 
 ### M2 — Chase camera
 
@@ -241,4 +243,6 @@ Park later ideas here instead of building them early.
 - Leaderboards
 - Day/night cycle and weather
 - Bundle is ~3.4 MB (1.2 MB gzip), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
+- Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
+- The shadow camera covers only ±20 m around the origin, so the car loses its shadow far from spawn; make it follow the car (M2/M12).
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.

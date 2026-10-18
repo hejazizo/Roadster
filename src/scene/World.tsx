@@ -1,19 +1,15 @@
-import { useThree } from '@react-three/fiber'
-import { Physics } from '@react-three/rapier'
-import { Suspense, useEffect } from 'react'
+import { Physics, type RapierRigidBody } from '@react-three/rapier'
+import { Suspense, useRef } from 'react'
+import LookAtCar from '../camera/LookAtCar'
+import Car from '../car/Car'
 import { TUNING } from '../config/tuning'
-import FallingCube from './FallingCube'
 import Ground from './Ground'
 import Lights from './Lights'
 
 const SKY_COLOR = '#87ceeb'
 
 export default function World() {
-  const camera = useThree((state) => state.camera)
-
-  useEffect(() => {
-    camera.lookAt(0, 1, 0)
-  }, [camera])
+  const carRef = useRef<RapierRigidBody>(null)
 
   return (
     <>
@@ -22,9 +18,10 @@ export default function World() {
       <Suspense fallback={null}>
         <Physics gravity={TUNING.world.gravity}>
           <Ground />
-          <FallingCube />
+          <Car ref={carRef} />
         </Physics>
       </Suspense>
+      <LookAtCar target={carRef} />
     </>
   )
 }

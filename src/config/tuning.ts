@@ -1,7 +1,60 @@
 // All gameplay and physics values live here. Components import from this file
 // instead of hard-coding numbers, so the game can be tuned in one place.
+type Vec3 = [number, number, number]
+
 export const TUNING = {
   world: {
-    gravity: [0, -9.81, 0] as [number, number, number],
+    gravity: [0, -9.81, 0] as Vec3,
+  },
+  car: {
+    // Car-local axes: +Z is forward (Rapier's vehicle forward axis), +Y up, +X left.
+    spawn: {
+      position: [0, 1.5, 0] as Vec3,
+      yaw: Math.PI, // face away from the default camera
+    },
+    chassis: {
+      halfExtents: [0.9, 0.3, 2.0] as Vec3,
+      mass: 150,
+    },
+    wheels: {
+      radius: 0.4,
+      width: 0.3,
+      // Chassis-local suspension mount points: front-left, front-right, rear-left, rear-right.
+      positions: [
+        [0.85, -0.1, 1.3],
+        [-0.85, -0.1, 1.3],
+        [0.85, -0.1, -1.3],
+        [-0.85, -0.1, -1.3],
+      ] as Vec3[],
+    },
+    suspension: {
+      restLength: 0.4,
+      maxTravel: 0.3,
+      stiffness: 30,
+      compression: 4.4,
+      relaxation: 2.3,
+      maxForce: 100000,
+    },
+    tires: {
+      frictionSlip: 2.5,
+      sideFrictionStiffness: 1,
+    },
+    engine: {
+      force: 400, // per driven (rear) wheel
+      reverseForce: 250,
+      maxSpeed: 30, // m/s, engine cuts out above this
+      maxReverseSpeed: 8,
+    },
+    brake: {
+      force: 10,
+      handbrakeForce: 20, // rear wheels only
+      idleBrake: 0.5, // applied when neither throttle nor brake is held
+    },
+    steering: {
+      maxAngle: 0.5, // rad
+      speed: 2.5, // rad/s the wheels turn towards the target angle
+    },
+    // Below this speed (m/s) S starts reversing instead of braking, and W the other way round.
+    stopSpeed: 0.5,
   },
 } as const
