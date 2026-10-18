@@ -1,5 +1,6 @@
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
+import { useRaceStore } from '../state/raceStore'
 import './Hud.css'
 import RaceHud from './RaceHud'
 
@@ -38,8 +39,10 @@ function Status() {
   return <div className={`hud-status is-${status.toLowerCase()}`}>{status}</div>
 }
 
-// Plain HTML overlay on top of the canvas.
+// Plain HTML overlay on top of the canvas, hidden behind the main menu.
 export default function Hud() {
+  const inMenu = useRaceStore((s) => s.phase === 'menu')
+  if (inMenu) return null
   return (
     <div className="hud">
       <div className="hud-panel">

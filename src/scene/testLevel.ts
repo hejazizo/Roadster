@@ -13,6 +13,7 @@ export type Ramp = { start: Vec3; yaw: number; run: number; rise: number; width:
 export type Ring = { center: Vec3; yaw: number; radius: number }
 
 export type Level = {
+  id: string // stable key for saved best times
   ground: Box[] // walkable island slabs, top at y = 0; the void around them is out of bounds
   platforms: Box[]
   walls: Box[]
@@ -60,6 +61,7 @@ function roundedRect(
 }
 
 export const TEST_LEVEL: Level = {
+  id: 'test',
   ground: [
     ground(-110, 110, -150, 70), // main island, spawn at the origin
     // North island across the void: the west arm is a 20 m jump away, the rest 80 m (glide).

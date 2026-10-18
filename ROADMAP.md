@@ -24,7 +24,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 4   | Basic HUD                      | 1 · Core    | ☑      |
 | 5   | Greybox test world             | 1 · Core    | ☑      |
 | 6   | Ring time-trial loop           | 2 · Game    | ☑      |
-| 7   | Menus & saved best times       | 2 · Game    | ☐      |
+| 7   | Menus & saved best times       | 2 · Game    | ☑      |
 | 8   | Input mapping & gamepad        | 2 · Game    | ☐      |
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☐      |
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☐      |
@@ -134,6 +134,8 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 - Best time saved in `localStorage` (wrapped in try/catch).
 
 **Done when:** the whole flow works without a page reload.
+
+✅ **Done:** `src/ui/Menus.tsx` shows a main menu (best time, Play, controls), a pause menu (Resume / Restart / Quit) and a results screen (time, best or "New best!", Retry / Menu); keys Enter = play/restart, Esc = pause/resume (menu from results), Q = quit, and the game pauses itself on window blur or tab hide; `raceStore` gains a `menu` phase, `paused`, `quit()` and the best time, and pausing sets `<Physics paused>` so the car, clock and rings all freeze; the car coasts to a stop behind the results screen; best time per level (`Level.id`) in `localStorage` via `src/state/bestTimes.ts` (try/catch, junk values ignored). Checked in headless Chrome: full loop without reload, paused clock and car frozen, best saved across reloads, blocked/garbage storage handled.
 
 ### M8 — Input mapping & gamepad
 
@@ -261,7 +263,6 @@ Park later ideas here instead of building them early.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
 - Respawn faces the way the car was heading, so after driving off an edge it faces the drop 4 m back; holding W drives straight off again. Consider facing away from the nearest edge, or a short input lockout — M15.
 - The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M15/M16).
-- Enter now restarts the run from spawn (M6); a pause-menu Restart comes with M7.
 - The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).

@@ -36,6 +36,9 @@ const isFront = (i: number) => i < 2
 
 // Controls while the race holds the car at the start.
 const HELD = { ...released(), handbrake: true }
+// After the finish the car rolls to a stop on the idle brake behind the results screen
+// (a rear handbrake at boost speed could spin it).
+const COASTING = released()
 
 // Applied every step so suspension and tire changes from the tuning panel take effect live.
 function applyWheelTuning(vc: VehicleController, i: number) {
@@ -100,7 +103,7 @@ export default function Car({ ref, visualRef }: CarProps) {
     const body = ref.current
     if (!vc || !body || !ray.current) return
     const race = useRaceStore.getState()
-    const c = isCarHeld(race.phase) ? HELD : controls.current
+    const c = race.phase === 'racing' ? controls.current : isCarHeld(race.phase) ? HELD : COASTING
 
     // A race restart forgets the safe point, so the car goes back to spawn.
     const restarted = race.runId !== runId.current

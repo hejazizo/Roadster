@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import World from './scene/World'
 import Hud from './ui/Hud'
+import Menus from './ui/Menus'
 import TuningPanel from './ui/TuningPanel'
 
 export default function App() {
@@ -10,6 +11,7 @@ export default function App() {
         <World />
       </Canvas>
       <Hud />
+      <Menus />
       <TuningPanel />
     </>
   )

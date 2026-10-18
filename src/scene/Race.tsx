@@ -7,7 +7,6 @@ import {
 import { useEffect, type RefObject } from 'react'
 import { TUNING } from '../config/tuning'
 import { useRaceStore } from '../state/raceStore'
-import { isTypingTarget } from '../ui/isTypingTarget'
 import type { Level, Ring } from './testLevel'
 
 const NEXT_COLOR = '#ffd60a'
@@ -67,26 +66,16 @@ type RaceProps = {
   car: RefObject<RapierRigidBody | null>
 }
 
-// Ring time trial: checkpoint rings, the race clock and the start/restart key.
+// Ring time trial: checkpoint rings and the race clock. Starting, pausing and restarting
+// live in the menus (src/ui/Menus.tsx).
 export default function Race({ level, car }: RaceProps) {
-  const { rings } = level
+  const { id, rings } = level
 
   useEffect(() => {
-    useRaceStore.getState().setCourse(rings.length)
-  }, [rings])
+    useRaceStore.getState().setCourse(id, rings.length)
+  }, [id, rings])
 
   useBeforePhysicsStep((world) => useRaceStore.getState().tick(world.timestep))
-
-  // Enter starts or restarts the run. Temporary until the input layer in M8.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'Enter' || e.repeat || isTypingTarget(e)) return
-      e.preventDefault()
-      useRaceStore.getState().restart()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
 
   return (
     <RigidBody type="fixed" colliders={false}>

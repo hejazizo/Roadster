@@ -1,0 +1,149 @@
+.menu {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(10, 14, 22, 0.25);
+  font-family: system-ui, sans-serif;
+  color: #ffffff;
+  user-select: none;
+}
+
+.menu.is-dim {
+  background: rgba(10, 14, 22, 0.55);
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 300px;
+  max-width: 100%;
+  padding: 28px 32px;
+  border-radius: 12px;
+  background: rgba(15, 20, 30, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.menu-title {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.menu-subtitle {
+  margin-top: -10px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.menu-heading {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.menu-time {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-best {
+  min-height: 22px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-badge {
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: #ffd60a;
+  color: #111111;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+}
+
+.menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.menu-button:focus-visible {
+  outline: 2px solid #4cc9f0;
+  outline-offset: 2px;
+}
+
+.menu-button.is-primary {
+  background: #ffd60a;
+  color: #111111;
+}
+
+.menu-button.is-primary:hover {
+  background: #ffe24d;
+}
+
+.menu-key {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.menu-controls {
+  display: grid;
+  gap: 4px;
+  align-self: stretch;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.menu-controls div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.menu-controls dt {
+  font-weight: 600;
+}
+
+.menu-controls dd {
+  margin: 0;
+  opacity: 0.7;
+}
