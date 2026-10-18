@@ -31,7 +31,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 11  | Hero Roadster model            | 3 · Details | ☑      |
 | 12  | Lighting & materials           | 3 · Details | ☑      |
 | 13  | Thruster VFX & post-processing | 3 · Details | ☑      |
-| 14  | Audio                          | 3 · Details | ☐      |
+| 14  | Audio                          | 3 · Details | ☑      |
 | 15  | Handling & flight polish       | 3 · Details | ☐      |
 | 16  | Real level art                 | 3 · Details | ☐      |
 | 17  | More levels & game modes       | 3 · Details | ☐      |
@@ -252,6 +252,25 @@ Everything freezes while paused and clears on restart. `src/scene/Effects.tsx` a
 
 **Done when:** every key action has a sound and there are no autoplay errors.
 
+✅ **Done:** all sound and music are synthesized with the Web Audio API in `src/audio/` (no files; +4 kB gzipped). `audio.ts` creates the context only from inside a click or key press (`onUserGesture` in `src/input/input.ts`, checked against `navigator.userActivation`, so Esc or a gamepad press never makes a context the browser would refuse) and routes music and effects through master and a limiter; the tab hiding suspends it. Sounds:
+
+- `CarAudio` (next to `CarEffects`) runs the car's loops: a motor of detuned saws plus an inverter whine, pitched by speed and opened up by throttle; a thruster roar that follows the flame's smoothed thrust, so boost and glide both have it; wind growing with speed², louder in the air; and tyre squeal from wheel skid.
+- One-shots fire on changes: boost burst, hop (`telemetry.hops`), landing thump scaled by impact, respawn on R or a fall (`telemetry.respawns`).
+- Race sounds come from `raceStore` changes: 3-2-1 beeps and GO, a ring chime climbing a pentatonic scale, and a finish arpeggio (longer for a new best). The menus play confirm / back / tick sounds.
+- `music.ts` is a lookahead step sequencer playing a four-bar synthwave loop in A minor: pad and arpeggio on the menus, plus bass and drums during a run.
+- Pausing fades out the car and muffles the music.
+
+Master / Music / Effects sliders and a mute toggle (M) sit on the main and pause menus, saved in localStorage (`src/state/audioStore.ts`, junk values ignored). A pad-only player sees "Click or press a key to turn it on" until audio starts. Mix and mapping values are in `TUNING.audio` and the tuning panel. Headless Chrome with `--autoplay-policy=user-gesture-required`, 38 checks:
+
+- no context before a gesture or on Esc, and no autoplay warnings;
+- each action's sound fires, and the motor goes 70 → 192 Hz over a 3 s drive;
+- pause silences the car and muffles the music;
+- sliders, mute, persistence and junk storage all behave;
+- the hidden tab suspends the context;
+- a pad press first starts the run silently, without errors.
+
+A 3 s drive matches HEAD (15.89 m/s), and frames hold 60 fps also with the CPU throttled 4×.
+
 ### M15 — Handling & flight polish
 
 - Tire grip curves, drift / handbrake slides, weight transfer.
@@ -326,3 +345,6 @@ Park later ideas here instead of building them early.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
 - Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M15/M16). Marks are drawn on any ground the wheels touch, including ramps.
 - The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.
+- Volume can only be set with the mouse (sliders) or muted with M; keyboard and gamepad navigation of the sliders belongs to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
+- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with M15/M16 grip. Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
+- The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M15/M19).

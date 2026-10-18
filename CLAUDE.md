@@ -34,6 +34,7 @@ Local Node (alternative):
 - `car/` — car physics and controls
 - `camera/` — chase / debug cameras
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect
+- `audio/` — synthesized sound and music (Web Audio API, no files); starts on the first click or key press
 - `input/` — input layer: keyboard and gamepads mapped to actions
 - `ui/` — HTML overlay (HUD, menus)
 - `state/` — Zustand stores

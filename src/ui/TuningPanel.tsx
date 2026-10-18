@@ -21,6 +21,11 @@ const SECTIONS: [string, Record<string, unknown>][] = [
   ['Skid FX', TUNING.vfx.skid],
   ['Flame', TUNING.vfx.flame],
   ['Post', TUNING.vfx.post],
+  ['Audio mix', TUNING.audio.mix],
+  ['Motor sound', TUNING.audio.motor],
+  ['Wind sound', TUNING.audio.wind],
+  ['Skid sound', TUNING.audio.skid],
+  ['Music', TUNING.audio.music],
   ['Input', TUNING.input],
 ]
 

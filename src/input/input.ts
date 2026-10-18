@@ -24,6 +24,7 @@ let padButtons = new Set<ButtonAction>()
 
 type PressListener = (action: ButtonAction) => void
 const listeners = new Set<PressListener>()
+const gestureListeners = new Set<() => void>()
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
@@ -45,6 +46,20 @@ export function onPress(listener: PressListener): () => void {
   return () => {
     listeners.delete(listener)
   }
+}
+
+// Calls `listener` on every key press, click or tap, from inside the event handler, so it
+// can do what browsers only allow in a user gesture (starting audio). Gamepad presses don't
+// count as gestures in browsers. Returns an unsubscribe function.
+export function onUserGesture(listener: () => void): () => void {
+  gestureListeners.add(listener)
+  return () => {
+    gestureListeners.delete(listener)
+  }
+}
+
+const emitGesture = (e: Event) => {
+  if (e.isTrusted) gestureListeners.forEach((listener) => listener())
 }
 
 // Vibrates every connected gamepad that supports it; strength 0–1. Does nothing without one.
@@ -76,6 +91,7 @@ const isBoundKey = (code: string) =>
   })
 
 function onKeyDown(e: KeyboardEvent) {
+  emitGesture(e)
   // Ignore presses while typing in a text field; releases still go through.
   if (!isBoundKey(e.code) || isTypingTarget(e)) return
   // Enter or Space on a focused button is left to the button's own click.
@@ -157,6 +173,9 @@ export function useInputDevices() {
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
+    // Mouse clicks activate on pointerdown, touch only on release.
+    window.addEventListener('pointerdown', emitGesture)
+    window.addEventListener('pointerup', emitGesture)
     let frame = requestAnimationFrame(function poll() {
       pollGamepads()
       frame = requestAnimationFrame(poll)
@@ -165,6 +184,8 @@ export function useInputDevices() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
+      window.removeEventListener('pointerdown', emitGesture)
+      window.removeEventListener('pointerup', emitGesture)
       cancelAnimationFrame(frame)
       keysDown.clear()
       padButtons = new Set()

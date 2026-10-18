@@ -13,19 +13,25 @@ export type WheelTelemetry = {
   normal: Vector3 // world ground normal, valid while in contact
 }
 
-// What the effects and camera read about the car: landings, skids and braking. Stepped
-// with physics after the abilities, so it holds still while the game is paused.
+// What the effects, camera and sound read about the car: landings, skids, braking, hops.
+// Stepped with physics after the abilities, so it holds still while the game is paused.
 export type CarTelemetry = {
+  speed: number // m/s along the car's forward axis (negative in reverse)
+  throttle: number // -1…1, the throttle the car was given this step
   grounded: boolean
   airTime: number // s since the wheels left the ground
   fallSpeed: number // m/s downwards on the last airborne step
   landings: number // bumped on every landing, so readers can spot a new one
   landingImpact: number // 0–1 strength of the last landing
   braking: boolean
+  hops: number // bumped on every hop
+  respawns: number // bumped on every R or fall, not on a race restart
   wheels: WheelTelemetry[]
 }
 
 export const createTelemetry = (): CarTelemetry => ({
+  speed: 0,
+  throttle: 0,
   grounded: false,
   // The car starts in the air at spawn; see resetTelemetry.
   airTime: -Infinity,
@@ -33,6 +39,8 @@ export const createTelemetry = (): CarTelemetry => ({
   landings: 0,
   landingImpact: 0,
   braking: false,
+  hops: 0,
+  respawns: 0,
   wheels: TUNING.car.wheels.positions.map(() => ({
     contact: false,
     skid: 0,
@@ -42,8 +50,10 @@ export const createTelemetry = (): CarTelemetry => ({
 })
 
 // After a reset the car drops onto the ground from a little above; a negative-infinite
-// air time keeps that touchdown from counting as a landing.
-export function resetTelemetry(t: CarTelemetry) {
+// air time keeps that touchdown from counting as a landing. `respawned` is false for a race
+// restart, which isn't counted in `respawns`.
+export function resetTelemetry(t: CarTelemetry, respawned: boolean) {
+  if (respawned) t.respawns++
   t.airTime = -Infinity
   t.fallSpeed = 0
   for (const w of t.wheels) {
@@ -112,9 +122,13 @@ export function stepTelemetry(
     t.airTime = 0
   }
   t.grounded = grounded
+  // The same wheel contacts and press that make abilities.ts hop.
+  if (c.hopPressed && grounded) t.hops++
 
   // Brake lights: braking against the motion, or the handbrake while rolling.
   const speed = vc.currentVehicleSpeed()
+  t.speed = speed
+  t.throttle = c.throttle
   const { stopSpeed } = TUNING.car
   t.braking =
     (c.throttle > 0 && speed < -stopSpeed) ||

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { sfx } from '../audio/sounds'
 import { CAR_MODEL_CREDIT } from '../config/assets'
 import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
 import { PAINTS } from '../config/paints'
@@ -8,11 +9,26 @@ import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
 import { formatTime } from './formatTime'
 import './Menus.css'
+import SoundSettings from './SoundSettings'
 
-const play = () => useRaceStore.getState().restart()
-const quit = () => useRaceStore.getState().quit()
-const resume = () => useRaceStore.getState().setPaused(false)
+const play = () => {
+  sfx.uiConfirm()
+  useRaceStore.getState().restart()
+}
+const quit = () => {
+  sfx.uiBack()
+  useRaceStore.getState().quit()
+}
+const resume = () => {
+  sfx.uiTick()
+  useRaceStore.getState().setPaused(false)
+}
+// Silent: also called when the window loses focus.
 const pause = () => useRaceStore.getState().setPaused(true)
+const pickPaint = (change: () => void) => {
+  sfx.uiTick()
+  change()
+}
 
 const CONTROLS: [BindingRef[], string][] = [
   [
@@ -35,6 +51,7 @@ const CONTROLS: [BindingRef[], string][] = [
   [['reset'], 'Back to safe point'],
   [['restart'], 'Restart'],
   [['pause'], 'Pause'],
+  [['mute'], 'Sound on / off'],
 ]
 
 type Screen = 'main' | 'pause' | 'results' | null
@@ -51,13 +68,15 @@ function useMenuInput() {
       const race = useRaceStore.getState()
       const screen = screenOf(race)
       if (action === 'pause') {
-        if (isRunning(race.phase)) race.setPaused(!race.paused)
-        else if (screen === 'results') quit()
+        if (isRunning(race.phase)) {
+          sfx.uiTick()
+          race.setPaused(!race.paused)
+        } else if (screen === 'results') quit()
       } else if (screen) {
         if (action === 'confirm') play()
         else if (action === 'back' && screen !== 'main') quit()
         else if (screen === 'main' && (action === 'prev' || action === 'next')) {
-          usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1)
+          pickPaint(() => usePaintStore.getState().cyclePaint(action === 'next' ? 1 : -1))
         }
       } else if (action === 'restart') {
         play()
@@ -129,7 +148,7 @@ function PaintPicker() {
             className={`menu-swatch${paint.id === paintId ? ' is-selected' : ''}`}
             style={{ background: paint.color }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => usePaintStore.getState().setPaint(paint.id)}
+            onClick={() => pickPaint(() => usePaintStore.getState().setPaint(paint.id))}
           />
         ))}
       </div>
@@ -158,13 +177,20 @@ function MainMenu() {
         <div className="menu-buttons">
           <MenuButton primary label="Play" action="confirm" onClick={play} />
         </div>
+        <SoundSettings />
         <dl className="menu-controls">
-          {CONTROLS.map(([refs, description]) => (
-            <div key={description}>
-              <dt>{bindingLabel(refs, device)}</dt>
-              <dd>{description}</dd>
-            </div>
-          ))}
+          {CONTROLS.map(([refs, description]) => {
+            // Actions without a binding on this device (mute on a gamepad) are left out.
+            const label = bindingLabel(refs, device)
+            return (
+              label && (
+                <div key={description}>
+                  <dt>{label}</dt>
+                  <dd>{description}</dd>
+                </div>
+              )
+            )
+          })}
         </dl>
         <p className="menu-credit">
           Car model by {CAR_MODEL_CREDIT.author} on{' '}
@@ -192,6 +218,7 @@ function PauseMenu() {
           <MenuButton label="Restart" action="confirm" onClick={play} />
           <MenuButton label="Quit" action="back" onClick={quit} />
         </div>
+        <SoundSettings />
       </div>
     </div>
   )

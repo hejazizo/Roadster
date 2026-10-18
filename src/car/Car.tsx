@@ -12,6 +12,7 @@ import { TUNING } from '../config/tuning'
 import { rumble } from '../input/input'
 import { useCarStore } from '../state/carStore'
 import { isCarHeld, useRaceStore } from '../state/raceStore'
+import CarAudio from '../audio/CarAudio'
 import CarEffects from '../vfx/CarEffects'
 import {
   createAbilityState,
@@ -124,7 +125,7 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
       placeAtSafePoint(safePoint.current, body)
       steer.current = 0
       resetAbilities(abilities.current, body)
-      resetTelemetry(telemetry.current)
+      resetTelemetry(telemetry.current, !restarted)
     }
 
     // Analog throttle: forces scale with how far the trigger (or key, fully) is pressed.
@@ -234,6 +235,7 @@ export default function Car({ ref, visualRef, telemetry }: CarProps) {
       </RigidBody>
       {/* World-space effects, outside the moving body. */}
       <CarEffects body={ref} telemetry={telemetry} thrust={thrust} nozzles={nozzles} />
+      <CarAudio body={ref} telemetry={telemetry} thrust={thrust} abilities={abilities} />
     </>
   )
 }

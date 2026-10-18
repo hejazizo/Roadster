@@ -20,6 +20,9 @@ Production build (`BASE_PATH=/Roadster/ npm run build`, `vite preview`), test le
 | **M13** VFX + post, M2 Max        | 1280×800  | menu    | 60.0       | 16.8 ms   | 79                 | 287k              |
 | **M13** VFX + post, M2 Max        | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
 | same, CPU throttled 4× (DevTools) | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
+| **M14** audio, M2 Max             | 1280×800  | menu    | 60.0       | 16.8 ms   | 79                 | 287k              |
+| **M14** audio, M2 Max             | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
+| same, CPU throttled 4× (DevTools) | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
 
 All runs sit at the 60 Hz display's vsync cap, so there is headroom we haven't measured. Draw calls include the shadow pass: every shadow-casting mesh is drawn twice. The menu draws more than driving because from spawn the camera looks out over most of the level; while driving, frustum culling drops whatever is behind or beside the car.
 
@@ -31,6 +34,14 @@ Where the draw calls come from: 23 level boxes and ramps, 3 drei `<Grid>` planes
 
 **M13** (same setup): the post-processing chain is most of the +19 calls on the menu. Bloom's mipmap blur is a luminance pass plus a down- and upsample chain, then come the speed blur (its own pass, since it samples neighbouring pixels) and the final pass with vignette and tone mapping. These are full-screen passes, so their GPU cost grows with the canvas size, which these runs (1280×800) don't stress. The scene itself gained the two particle pools (embers, dust/smoke) and the tire marks (once there are any), lost the two thruster discs, and draws 6 more calls while thrusting (2 cones and a glow sprite per nozzle). None of the effects casts a shadow. The composer renders at the canvas resolution with 4× MSAA on a half-float target. On low settings (M18) the bloom could run at half resolution and the speed blur could be dropped.
 
+**M14** (same setup, audio running from the first Enter): no change on the GPU side. Sound runs on the browser's audio thread:
+
+- the car keeps 4 oscillators and 6 looping noise sources playing;
+- the music starts 1–2 short notes per 16th (8 at the top of each bar for the pad);
+- one-shots add a few nodes each.
+
+The main thread only sets about 15 audio parameters per frame and wakes a 25 ms timer for the sequencer, so frames stay pinned at vsync with the CPU throttled 4×.
+
 ## Bundle
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
@@ -40,7 +51,7 @@ Where the draw calls come from: 23 level boxes and ramps, 3 drei `<Grid>` planes
 | `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                       |
 | `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip) |
 | `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                  |
-| `index`       | 46 kB   | 17 kB   | the game                                                                                                     |
+| `index`       | 58 kB   | 22 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files)                                                  |
 | `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                           |
 | `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures  |
 | sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)               |

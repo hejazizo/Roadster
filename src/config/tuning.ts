@@ -161,4 +161,36 @@ export const TUNING = {
       vignette: 0.45, // darkness
     },
   },
+  // Synthesized sound (src/audio). Levels are linear gains before the player's volume
+  // settings; how each sound is built (waveforms, envelopes) lives with it in src/audio.
+  audio: {
+    mix: {
+      motor: 0.35,
+      whine: 0.06, // thin high inverter whine on top of the motor
+      thruster: 0.5,
+      wind: 0.25,
+      skid: 0.3,
+      oneShots: 0.8, // hop, landing, boost burst, respawn
+      race: 0.6, // countdown, rings, finish
+      ui: 0.4,
+      music: 0.5,
+    },
+    motor: {
+      idlePitch: 70, // Hz at rest
+      topPitch: 420, // Hz at topSpeed
+      topSpeed: 45, // m/s
+      idleLevel: 0.25, // fraction of the motor level when coasting at rest
+      load: 0.6, // extra level and brightness at full throttle
+    },
+    wind: {
+      fullSpeed: 40, // m/s where the wind reaches full level
+      airborne: 1.6, // multiplier while in the air
+    },
+    skid: {
+      minSkid: 0.25, // wheel skid (0–1) below which the tyres stay quiet
+    },
+    music: {
+      tempo: 112, // BPM
+    },
+  },
 }

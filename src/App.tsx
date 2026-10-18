@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { NeutralToneMapping } from 'three'
+import { useGameAudio } from './audio/gameAudio'
 import { TUNING } from './config/tuning'
 import { onPress, useInputDevices } from './input/input'
 import World from './scene/World'
@@ -25,6 +26,7 @@ function useTuningToggle() {
 
 export default function App() {
   useInputDevices()
+  useGameAudio()
   const tuningOpen = useTuningToggle()
   return (
     <>
