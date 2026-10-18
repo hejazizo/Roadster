@@ -56,6 +56,35 @@ export const TUNING = {
     },
     // Below this speed (m/s) S starts reversing instead of braking, and W the other way round.
     stopSpeed: 0.5,
+    // Ability values are per unit of mass (m/s, m/s²), so they survive chassis mass changes.
+    fuel: {
+      max: 1, // a full tank
+      rechargePerSecond: 0.25, // while grounded and not boosting
+    },
+    boost: {
+      acceleration: 12, // m/s² of thrust along the car's forward axis
+      maxSpeed: 45, // m/s forward, thrust cuts out above this
+      fuelPerSecond: 0.35,
+    },
+    hop: {
+      velocity: 6, // m/s added along the car's up axis
+    },
+    glide: {
+      gravityScale: 0.25, // fraction of world gravity while gliding
+      maxFallSpeed: 3, // m/s, faster falls are damped towards this
+      fallDamping: 3, // 1/s
+      headingAlign: 1.5, // 1/s, how quickly horizontal velocity turns to follow the car's heading
+      fuelPerSecond: 0.25,
+    },
+    // Light air control while gliding: W/S tilt the nose, A/D yaw and bank into the turn.
+    // Pitch and roll hold an angle and level out on release, so the car can't be flipped.
+    airControl: {
+      pitchAngle: 0.4, // rad nose down (W) or up (S)
+      bankAngle: 0.4, // rad of roll while yawing
+      levelRate: 3, // 1/s, how quickly pitch and roll follow their target angle
+      yawRate: 1.5, // rad/s
+      damping: 4, // 1/s, how quickly spin follows the input
+    },
   },
   camera: {
     chase: {

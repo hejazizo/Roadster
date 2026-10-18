@@ -20,7 +20,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 0   | Project scaffold               | 1 · Core    | ☑      |
 | 1   | Drivable box car               | 1 · Core    | ☑      |
 | 2   | Chase camera                   | 1 · Core    | ☑      |
-| 3   | Boost, hop & glide             | 1 · Core    | ☐      |
+| 3   | Boost, hop & glide             | 1 · Core    | ☑      |
 | 4   | Basic HUD                      | 1 · Core    | ☐      |
 | 5   | Greybox test world             | 1 · Core    | ☐      |
 | 6   | Ring time-trial loop           | 2 · Game    | ☐      |
@@ -60,7 +60,7 @@ Goal: a box that drives, flies a little, and feels good. No art, no menus.
 ### M1 — Drivable box car
 
 - Box chassis + 4 cylinder wheels using Rapier's raycast vehicle controller.
-- Keyboard: W/S = throttle/brake/reverse, A/D = steer, Space = handbrake, R = reset upright at spawn.
+- Keyboard: W/S = throttle/brake/reverse, A/D = steer, Space = handbrake (moved to E in M3), R = reset upright at spawn.
 - Basic values in `tuning.ts` (engine force, brake force, steer angle, suspension).
 
 **Done when:** you can drive around, turn, stop, reverse, and recover from flipping with R.
@@ -89,6 +89,8 @@ The signature mechanic. Arcade physics, not real aerodynamics.
 - All values in `tuning.ts`; spend time tuning until it's fun.
 
 **Done when:** you can hop, glide across a gap and land; fuel limits how long you stay airborne.
+
+✅ **Done:** `src/car/abilities.ts` runs per physics step after `updateVehicle`: grounded = any wheel in contact; Shift boost (thrust impulse, capped at 45 m/s), Space hop (edge-triggered), hold Space airborne to glide (gravity scale 0.25, capped fall speed, horizontal velocity follows the heading); air control holds pitch/bank angles and auto-levels so the car can't be flipped; fuel drains on boost/glide and refills on the ground; handbrake moved to E; rear placeholder thruster glows while thrusting; values in `TUNING.car.{fuel,boost,hop,glide,airControl}`. Headless Rapier sim: plain hop ≈ 1.9 m / 1.2 s air, full-tank glide ≈ 4 s.
 
 ### M4 — Basic HUD
 
@@ -249,4 +251,8 @@ Park later ideas here instead of building them early.
 - Chase cam ground clamp assumes flat ground at y = 0; switch to a downward raycast when M5 adds platforms and ramps.
 - The chase cam can pass through walls between it and the car; add an obstruction raycast when M5 adds walls (or in M15).
 - A reset tap shorter than one physics step (~16 ms) can be missed because controls are sampled per step; latch presses in the M8 input layer.
+- Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M8 input layer or M15.
+- Fuel is only visible through the thruster glow until the M4 HUD adds a fuel bar.
+- There is no gap to glide over until M5; check gap widths and ramp heights against glide distance there (hop + full glide at 43 m/s covers ~245 m on flat ground).
+- Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.

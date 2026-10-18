@@ -6,6 +6,8 @@ export type CarControls = {
   left: boolean
   right: boolean
   handbrake: boolean
+  boost: boolean
+  hop: boolean
   reset: boolean
 }
 
@@ -18,7 +20,10 @@ const KEY_MAP: Record<string, keyof CarControls> = {
   ArrowLeft: 'left',
   KeyD: 'right',
   ArrowRight: 'right',
-  Space: 'handbrake',
+  KeyE: 'handbrake',
+  ShiftLeft: 'boost',
+  ShiftRight: 'boost',
+  Space: 'hop',
   KeyR: 'reset',
 }
 
@@ -28,6 +33,8 @@ const released = (): CarControls => ({
   left: false,
   right: false,
   handbrake: false,
+  boost: false,
+  hop: false,
   reset: false,
 })
 

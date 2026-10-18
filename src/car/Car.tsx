@@ -7,8 +7,21 @@ import {
   type RapierRigidBody,
 } from '@react-three/rapier'
 import { useEffect, useRef, type RefObject } from 'react'
-import { MathUtils, Quaternion, Vector3, type Group, type Mesh } from 'three'
+import {
+  MathUtils,
+  Quaternion,
+  Vector3,
+  type Group,
+  type Mesh,
+  type MeshStandardMaterial,
+} from 'three'
 import { TUNING } from '../config/tuning'
+import {
+  createAbilityState,
+  resetAbilities,
+  stepAbilities,
+  type VehicleController,
+} from './abilities'
 import { useCarControls } from './useCarControls'
 
 const { spawn, chassis, wheels, suspension, tires, engine, brake, steering, stopSpeed } = TUNING.car
@@ -16,15 +29,15 @@ const { spawn, chassis, wheels, suspension, tires, engine, brake, steering, stop
 const BODY_COLOR = '#e63946'
 const CABIN_COLOR = '#1d3557'
 const WHEEL_COLOR = '#222222'
+// Placeholder thruster at the rear: glows while boosting or gliding, dark when out of fuel.
+const THRUSTER_COLOR = '#333333'
+const THRUSTER_GLOW = '#ff8c1a'
+const THRUSTER_GLOW_INTENSITY = 3
 
 const SPAWN_ROTATION = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), spawn.yaw)
 const [hx, hy, hz] = chassis.halfExtents
 
 const isFront = (i: number) => i < 2
-
-type VehicleController = ReturnType<
-  ReturnType<typeof useRapier>['world']['createVehicleController']
->
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
@@ -38,6 +51,8 @@ export default function Car({ ref, visualRef }: CarProps) {
   const vehicle = useRef<VehicleController | null>(null)
   const steer = useRef(0)
   const resetHeld = useRef(false)
+  const abilities = useRef(createAbilityState())
+  const thruster = useRef<MeshStandardMaterial>(null)
   const steerGroups = useRef<(Group | null)[]>([])
   const spinGroups = useRef<(Group | null)[]>([])
 
@@ -85,6 +100,7 @@ export default function Car({ ref, visualRef }: CarProps) {
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
       steer.current = 0
+      resetAbilities(abilities.current, body)
     }
     resetHeld.current = c.reset
 
@@ -112,10 +128,15 @@ export default function Car({ ref, visualRef }: CarProps) {
       vc.setWheelBrake(i, !front && c.handbrake ? brake.handbrakeForce : brakeForce)
     }
     vc.updateVehicle(world.timestep)
+    stepAbilities(abilities.current, body, vc, c, world.timestep)
   })
 
   // Visual wheels follow the controller's suspension, steering and spin.
   useFrame(() => {
+    if (thruster.current) {
+      const { boosting, gliding } = abilities.current
+      thruster.current.emissiveIntensity = boosting || gliding ? THRUSTER_GLOW_INTENSITY : 0
+    }
     const vc = vehicle.current
     if (!vc) return
     wheels.positions.forEach(([, y], i) => {
@@ -145,6 +166,15 @@ export default function Car({ ref, visualRef }: CarProps) {
       <mesh castShadow position={[0, hy + 0.2, hz * 0.15]}>
         <boxGeometry args={[hx * 1.6, 0.4, hz * 0.9]} />
         <meshStandardMaterial color={CABIN_COLOR} />
+      </mesh>
+      <mesh position={[0, 0, -hz - 0.05]}>
+        <boxGeometry args={[hx, hy, 0.1]} />
+        <meshStandardMaterial
+          ref={thruster}
+          color={THRUSTER_COLOR}
+          emissive={THRUSTER_GLOW}
+          emissiveIntensity={0}
+        />
       </mesh>
       {wheels.positions.map(([x, y, z], i) => (
         <group
