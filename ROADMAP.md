@@ -27,7 +27,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 7   | Menus & saved best times       | 2 · Game    | ☑      |
 | 8   | Input mapping & gamepad        | 2 · Game    | ☑      |
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☑      |
-| 10  | Stable v0.1 & deploy           | 2 · Game    | ☐      |
+| 10  | Stable v0.1 & deploy           | 2 · Game    | ☑      |
 | 11  | Hero Roadster model            | 3 · Details | ☐      |
 | 12  | Lighting & materials           | 3 · Details | ☐      |
 | 13  | Thruster VFX & post-processing | 3 · Details | ☐      |
@@ -166,6 +166,8 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 **Done when:** a public URL runs the full game loop at a smooth framerate. **Checkpoint: the game is stable; detail work starts after this.**
 
+✅ **Done:** live at **https://hejazizo.github.io/Roadster/**. `.github/workflows/deploy.yml` lints, format-checks and builds with `BASE_PATH=/Roadster/` (read in `vite.config.ts`), then deploys to GitHub Pages on every push to `main`; version 0.1.0, tagged `v0.1.0`. Bug bash with a scripted headless-Chrome playthrough (76 checks: every phase transition, pause/blur/unplug, restart, quit, kill-Y respawn, finish and best time across reloads, gamepad) and a 2 min random-input soak: one bug fixed, a hop/reset press made on the pause menu firing on resume (now dropped while paused). leva is lazy-loaded on the first \` press, and vendor code is split into `rapier` / `three` / `react` chunks, so the game chunk is 28 kB. Static "Loading…" in `index.html` until React mounts. Tuning audit found nothing hard-coded. Baseline in `docs/performance.md`: 60 fps (vsync cap) at 2560×1440 on an M2 Max MacBook Pro, also with the CPU throttled 4×; 34–47 draw calls and ~10–15k triangles per frame; 1.2 MB gzipped first load, 70% of it Rapier.
+
 ---
 
 ## Phase 3 — Details & polish
@@ -258,11 +260,10 @@ Park later ideas here instead of building them early.
 - Multiplayer ghost races (share best-run replays)
 - Leaderboards
 - Day/night cycle and weather
-- Bundle is ~3.7 MB (1.27 MB gzip; GLTFLoader added ~70 kB in M9), mostly Rapier's inlined WASM; Vite warns about chunk size. Look at code-splitting / lazy-loading physics in M10 or M18.
+- First load is ~1.2 MB gzipped, 842 kB of it Rapier's inlined WASM (chunk sizes in `docs/performance.md`). `@react-three/rapier` imports Rapier statically, so lazy-loading physics behind the menu needs a wrapper or an upstream change — M18/M19 (with the loading screen).
 - Speed-sensitive steering (less steer angle at high speed) and some drag instead of a hard `maxSpeed` cutoff — M15.
 - Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M15. Hop presses are latched for one physics step now; a buffer would keep them a little longer.
 - Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
-- leva adds ~0.2 MB to the bundle and ships in production builds; make the tuning panel dev-only or lazy-load it in M10.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
 - Respawn faces the way the car was heading, so after driving off an edge it faces the drop 4 m back; holding W drives straight off again. Consider facing away from the nearest edge, or a short input lockout — M15.
 - The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M15/M16).
@@ -270,7 +271,6 @@ Park later ideas here instead of building them early.
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
 - Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons), rumble on landing and boost (M13/M15), and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data.
-- A press latched while the pause menu is up (e.g. Y) still fires on resume; clear the car's latches on pause if it ever matters.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
 - The placeholder body is longer than the 4 m chassis collider (4.55 m, nose ~0.57 m ahead of it), so the nose can dip into walls on a head-on hit, and its arches are modelled for bigger wheels than the physics' 0.4 m. Fit the collider (and maybe wheel size) to the hero model in M11, as a tuning change.
 - The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.

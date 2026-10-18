@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { axis, held, onPress } from '../input/input'
+import { useRaceStore } from '../state/raceStore'
 
 export type CarControls = {
   throttle: number // -1 brake / reverse … 1 drive
@@ -25,13 +26,15 @@ export const released = (): CarControls => ({
 
 // The car's view of the input layer. Presses are latched until the next physics step
 // reads them, so a tap shorter than one step still counts. Returns a function to call
-// once per step, which takes the latched presses.
+// once per step, which takes the latched presses. Presses on the pause menu are dropped,
+// since physics doesn't step while paused and they'd otherwise fire on resume.
 export function useCarControls() {
   const latched = useRef({ hop: false, reset: false })
 
   useEffect(
     () =>
       onPress((action) => {
+        if (useRaceStore.getState().paused) return
         if (action === 'hop' || action === 'reset') latched.current[action] = true
       }),
     [],

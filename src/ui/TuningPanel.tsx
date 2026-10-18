@@ -1,7 +1,5 @@
 import { button, folder, Leva, useControls } from 'leva'
-import { useEffect, useState } from 'react'
 import { TUNING } from '../config/tuning'
-import { onPress } from '../input/input'
 
 // Sections shown in the panel. Their values are read every physics step or frame, so
 // editing them in place takes effect immediately. Structural values (gravity, chassis,
@@ -51,19 +49,9 @@ const schema = Object.fromEntries(
 // Log the current values so tuned numbers can be copied back into tuning.ts.
 const logValues = () => console.log(JSON.stringify(TUNING, null, 2))
 
-// Live tuning panel, hidden until the tuning action (Backquote `) toggles it.
-export default function TuningPanel() {
-  const [open, setOpen] = useState(false)
-
+// Live tuning panel. App lazy-loads it on the first tuning action (Backquote `) and
+// toggles `open`; it stays mounted once loaded so edits and folder state survive.
+export default function TuningPanel({ open }: { open: boolean }) {
   useControls({ ...schema, 'Log values': button(logValues) })
-
-  useEffect(
-    () =>
-      onPress((action) => {
-        if (action === 'tuning') setOpen((current) => !current)
-      }),
-    [],
-  )
-
   return <Leva hidden={!open} />
 }

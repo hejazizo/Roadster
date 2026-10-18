@@ -6,3 +6,15 @@ body,
   margin: 0;
   overflow: hidden;
 }
+
+/* Shown in #root until React mounts, while the game's scripts download. */
+.boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #87ceeb;
+  font-family: system-ui, sans-serif;
+  font-size: 20px;
+  color: #ffffff;
+}

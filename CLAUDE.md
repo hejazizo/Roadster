@@ -18,6 +18,8 @@ Docker (only Docker needed on the host):
 
 The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
 
+Deploy: every push to `main` runs `.github/workflows/deploy.yml` (lint, format check, build) and publishes to GitHub Pages at https://hejazizo.github.io/Roadster/. The workflow sets `BASE_PATH=/Roadster/`; local builds use `/`. Reference files in `public/` through `import.meta.env.BASE_URL`, never with an absolute `/` path.
+
 Local Node (alternative):
 
 - `npm run dev` — dev server
@@ -36,7 +38,7 @@ Local Node (alternative):
 - `state/` — Zustand stores
 - `config/` — `tuning.ts`, `bindings.ts` and other config
 
-Outside `src/`: `public/models/` holds the runtime GLBs, `assets/` the source models they're built from, `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain).
+Outside `src/`: `public/models/` holds the runtime GLBs, `assets/` the source models they're built from, `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain) and `performance.md` (the FPS / draw-call baseline).
 
 ## Rules
 
