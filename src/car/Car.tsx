@@ -16,6 +16,7 @@ import {
   type MeshStandardMaterial,
 } from 'three'
 import { TUNING } from '../config/tuning'
+import { useCarStore } from '../state/carStore'
 import {
   createAbilityState,
   resetAbilities,
@@ -24,7 +25,7 @@ import {
 } from './abilities'
 import { useCarControls } from './useCarControls'
 
-const { spawn, chassis, wheels, suspension, tires, engine, brake, steering, stopSpeed } = TUNING.car
+const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
 
 const BODY_COLOR = '#e63946'
 const CABIN_COLOR = '#1d3557'
@@ -38,6 +39,18 @@ const SPAWN_ROTATION = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), s
 const [hx, hy, hz] = chassis.halfExtents
 
 const isFront = (i: number) => i < 2
+
+// Applied every step so suspension and tire changes from the tuning panel take effect live.
+function applyWheelTuning(vc: VehicleController, i: number) {
+  vc.setWheelSuspensionRestLength(i, suspension.restLength)
+  vc.setWheelMaxSuspensionTravel(i, suspension.maxTravel)
+  vc.setWheelSuspensionStiffness(i, suspension.stiffness)
+  vc.setWheelSuspensionCompression(i, suspension.compression)
+  vc.setWheelSuspensionRelaxation(i, suspension.relaxation)
+  vc.setWheelMaxSuspensionForce(i, suspension.maxForce)
+  vc.setWheelFrictionSlip(i, tires.frictionSlip)
+  vc.setWheelSideFrictionStiffness(i, tires.sideFrictionStiffness)
+}
 
 type CarProps = {
   ref: RefObject<RapierRigidBody | null>
@@ -63,7 +76,7 @@ export default function Car({ ref, visualRef }: CarProps) {
     const vc = world.createVehicleController(body)
     vc.indexUpAxis = 1
     vc.setIndexForwardAxis = 2
-    wheels.positions.forEach(([x, y, z], i) => {
+    wheels.positions.forEach(([x, y, z]) => {
       vc.addWheel(
         { x, y, z },
         { x: 0, y: -1, z: 0 },
@@ -71,13 +84,6 @@ export default function Car({ ref, visualRef }: CarProps) {
         suspension.restLength,
         wheels.radius,
       )
-      vc.setWheelMaxSuspensionTravel(i, suspension.maxTravel)
-      vc.setWheelSuspensionStiffness(i, suspension.stiffness)
-      vc.setWheelSuspensionCompression(i, suspension.compression)
-      vc.setWheelSuspensionRelaxation(i, suspension.relaxation)
-      vc.setWheelMaxSuspensionForce(i, suspension.maxForce)
-      vc.setWheelFrictionSlip(i, tires.frictionSlip)
-      vc.setWheelSideFrictionStiffness(i, tires.sideFrictionStiffness)
     })
     vehicle.current = vc
 
@@ -105,6 +111,7 @@ export default function Car({ ref, visualRef }: CarProps) {
     resetHeld.current = c.reset
 
     const speed = vc.currentVehicleSpeed()
+    const { stopSpeed } = TUNING.car
     let engineForce = 0
     let brakeForce = 0
     if (c.forward) {
@@ -123,6 +130,7 @@ export default function Car({ ref, visualRef }: CarProps) {
 
     for (let i = 0; i < wheels.positions.length; i++) {
       const front = isFront(i)
+      applyWheelTuning(vc, i)
       vc.setWheelSteering(i, front ? steer.current : 0)
       vc.setWheelEngineForce(i, front ? 0 : engineForce)
       vc.setWheelBrake(i, !front && c.handbrake ? brake.handbrakeForce : brakeForce)
@@ -133,10 +141,19 @@ export default function Car({ ref, visualRef }: CarProps) {
 
   // Visual wheels follow the controller's suspension, steering and spin.
   useFrame(() => {
+    const { fuel, grounded, boosting, gliding } = abilities.current
     if (thruster.current) {
-      const { boosting, gliding } = abilities.current
       thruster.current.emissiveIntensity = boosting || gliding ? THRUSTER_GLOW_INTENSITY : 0
     }
+    // Mirror the car's state for the HUD once per rendered frame.
+    const v = ref.current?.linvel()
+    useCarStore.setState({
+      speed: v ? Math.hypot(v.x, v.z) : 0,
+      fuel,
+      grounded,
+      boosting,
+      gliding,
+    })
     const vc = vehicle.current
     if (!vc) return
     wheels.positions.forEach(([, y], i) => {

@@ -21,7 +21,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 1   | Drivable box car               | 1 · Core    | ☑      |
 | 2   | Chase camera                   | 1 · Core    | ☑      |
 | 3   | Boost, hop & glide             | 1 · Core    | ☑      |
-| 4   | Basic HUD                      | 1 · Core    | ☐      |
+| 4   | Basic HUD                      | 1 · Core    | ☑      |
 | 5   | Greybox test world             | 1 · Core    | ☐      |
 | 6   | Ring time-trial loop           | 2 · Game    | ☐      |
 | 7   | Menus & saved best times       | 2 · Game    | ☐      |
@@ -99,6 +99,8 @@ The signature mechanic. Arcade physics, not real aerodynamics.
 - Optional debug panel (leva) for live tuning values.
 
 **Done when:** the HUD updates live and tuning can be adjusted without reloading.
+
+✅ **Done:** `src/state/carStore.ts` mirrors speed/fuel/grounded/boosting/gliding once per frame from `Car.tsx`; `src/ui/Hud.tsx` shows ground speed (km/h), fuel bar and a Grounded/Airborne/Gliding pill, one selector per readout; leva panel `src/ui/TuningPanel.tsx` (hidden, toggle with \`) edits `TUNING` sections in place, with a _Log values_ button to copy tuned numbers back; suspension/tires are re-applied every step and ChaseCam reads tuning per frame so changes apply live; game keys ignore text fields.
 
 ### M5 — Greybox test world
 
@@ -252,7 +254,7 @@ Park later ideas here instead of building them early.
 - The chase cam can pass through walls between it and the car; add an obstruction raycast when M5 adds walls (or in M15).
 - A reset tap shorter than one physics step (~16 ms) can be missed because controls are sampled per step; latch presses in the M8 input layer.
 - Hop input buffering / coyote time (press Space just before landing or just after leaving a ledge) — M8 input layer or M15.
-- Fuel is only visible through the thruster glow until the M4 HUD adds a fuel bar.
 - There is no gap to glide over until M5; check gap widths and ramp heights against glide distance there (hop + full glide at 43 m/s covers ~245 m on flat ground).
 - Air control currently works only while gliding; some (weaker) control while plainly airborne may feel better — M15. Glide also lowers gravity on the way up, so hop + hold flies higher (~8 m) than a plain hop; revisit if it feels floaty.
+- leva adds ~0.2 MB to the bundle and ships in production builds; make the tuning panel dev-only or lazy-load it in M10.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.

@@ -1,0 +1,85 @@
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* clicks and drags go through to the canvas */
+  font-family: system-ui, sans-serif;
+  color: #ffffff;
+  user-select: none;
+}
+
+.hud-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 200px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(15, 20, 30, 0.55);
+}
+
+.hud-speed {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-unit {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.hud-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.hud-fuel-track {
+  height: 8px;
+  margin-top: 3px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.hud-fuel-fill {
+  height: 100%;
+  background: #4cc9f0;
+}
+
+.hud-fuel.is-draining .hud-fuel-fill {
+  background: #ff8c1a;
+}
+
+.hud-fuel.is-empty .hud-fuel-track {
+  background: rgba(230, 57, 70, 0.6);
+}
+
+.hud-status {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hud-status.is-grounded {
+  background: #2a9d8f;
+}
+
+.hud-status.is-airborne {
+  background: #e76f51;
+}
+
+.hud-status.is-gliding {
+  background: #ff8c1a;
+}

@@ -1,5 +1,8 @@
 // All gameplay and physics values live here. Components import from this file
 // instead of hard-coding numbers, so the game can be tuned in one place.
+// The debug panel (src/ui/TuningPanel.tsx) edits these objects in place at runtime, so
+// read values when they're used (or keep a reference to their section object); never
+// copy a number out at module load.
 type Vec3 = [number, number, number]
 
 export const TUNING = {
@@ -102,4 +105,4 @@ export const TUNING = {
       snapDistance: 10, // m the car moves in one frame (reset/respawn) that snaps the camera
     },
   },
-} as const
+}

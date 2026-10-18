@@ -2,6 +2,7 @@ import { OrbitControls } from '@react-three/drei'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { useEffect, useState, type RefObject } from 'react'
 import { Vector3, type Object3D } from 'three'
+import { isTypingTarget } from '../ui/isTypingTarget'
 import ChaseCam from './ChaseCam'
 
 type CameraRigProps = {
@@ -16,7 +17,7 @@ export default function CameraRig({ target, body }: CameraRigProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'KeyC' || e.repeat) return
+      if (e.code !== 'KeyC' || e.repeat || isTypingTarget(e)) return
       const carPos = target.current?.getWorldPosition(new Vector3()) ?? new Vector3()
       setOrbitTarget((current) => (current ? null : carPos))
     }

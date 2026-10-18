@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { isTypingTarget } from '../ui/isTypingTarget'
 
 export type CarControls = {
   forward: boolean
@@ -46,7 +47,8 @@ export function useCarControls() {
   useEffect(() => {
     const set = (pressed: boolean) => (e: KeyboardEvent) => {
       const action = KEY_MAP[e.code]
-      if (!action) return
+      // Ignore presses while typing in a text field; releases still go through.
+      if (!action || (pressed && isTypingTarget(e))) return
       e.preventDefault()
       controls.current[action] = pressed
     }

@@ -36,5 +36,6 @@ Local Node (alternative):
 ## Rules
 
 - **Tuning lives in `src/config/tuning.ts`.** Speeds, forces, gravity, fuel and other gameplay/physics values go there, never hard-coded in components. Purely visual constants (colors, light intensity) may stay in the component.
+- **Read tuning live.** The debug panel (`src/ui/TuningPanel.tsx`, toggle with the backquote key) edits `TUNING` in place, so read values when they're used or hold a section object; never copy a number out at module load.
 - **One milestone per session.** Work on the milestone asked for; don't pull work forward. Park later ideas under _Notes / ideas_ in `ROADMAP.md`.
 - **Every milestone ends playable**: `dev`, `build` and `lint` all work, and the work is committed. Tick the milestone in `ROADMAP.md` with a one-line note.

@@ -4,20 +4,6 @@ import { useRef, type RefObject } from 'react'
 import { MathUtils, Quaternion, Vector3, type Object3D } from 'three'
 import { TUNING } from '../config/tuning'
 
-const {
-  distance,
-  height,
-  lookHeight,
-  lookAhead,
-  speedDistance,
-  maxExtraDistance,
-  positionDamping,
-  headingDamping,
-  lookDamping,
-  minHeight,
-  snapDistance,
-} = TUNING.camera.chase
-
 // Below this horizontal length the car points too far up/down to give a heading.
 const MIN_FLAT_FORWARD = 0.2
 
@@ -48,6 +34,20 @@ export default function ChaseCam({ target, body }: ChaseCamProps) {
   const started = useRef(false)
 
   useFrame(({ camera }, dt) => {
+    // Read per frame so live tuning applies.
+    const {
+      distance,
+      height,
+      lookHeight,
+      lookAhead,
+      speedDistance,
+      maxExtraDistance,
+      positionDamping,
+      headingDamping,
+      lookDamping,
+      minHeight,
+      snapDistance,
+    } = TUNING.camera.chase
     const car = target.current
     if (!car) return
     car.getWorldPosition(carPos)
