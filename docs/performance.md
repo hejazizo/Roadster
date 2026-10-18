@@ -17,30 +17,35 @@ Production build (`BASE_PATH=/Roadster/ npm run build`, `vite preview`), test le
 | **M12** materials + HDRI, M2 Max  | 1280×800  | menu    | 60.0       | 16.8 ms   | 60                 | 287k              |
 | **M12** materials + HDRI, M2 Max  | 1280×800  | driving | 60.0       | 16.7 ms   | 53 avg, 61 max     | 284k avg          |
 | same, CPU throttled 4× (DevTools) | 1280×800  | driving | 60.0       | 16.8 ms   | 53 avg, 61 max     | 284k avg          |
+| **M13** VFX + post, M2 Max        | 1280×800  | menu    | 60.0       | 16.8 ms   | 79                 | 287k              |
+| **M13** VFX + post, M2 Max        | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
+| same, CPU throttled 4× (DevTools) | 1280×800  | driving | 60.0       | 16.7 ms   | 75 avg, 85 max     | 284k avg          |
 
 All runs sit at the 60 Hz display's vsync cap, so there is headroom we haven't measured. Draw calls include the shadow pass: every shadow-casting mesh is drawn twice. The menu draws more than driving because from spawn the camera looks out over most of the level; while driving, frustum culling drops whatever is behind or beside the car.
 
-Where the draw calls come from: 23 level boxes and ramps, 3 drei `<Grid>` planes (one per ground slab), the road ribbon, 8 rings and the car (body, 4 wheels, 2 thruster discs), with the shadow pass on top.
+Where the draw calls come from: 23 level boxes and ramps, 3 drei `<Grid>` planes (one per ground slab), the road ribbon, 8 rings and the car (body, 4 wheels, 2 thruster discs until M13), with the shadow pass on top.
 
 **M11** (headless Chrome 155, same script, 1280×800 canvas): the hero car is 139k triangles (body 95k + 4 × 11k wheel) and is drawn twice per frame, once for the shadow map, so it accounts for ~278k of the ~285k triangles per frame. Its front-arch liners add one draw call (two with the shadow pass). Still pinned at vsync, also with the CPU throttled; the GPU cost of the triangles isn't measured beyond that. If the car ever shows up in a profile, cast its shadow from a decimated copy or drop the wheels from the shadow pass (M18).
 
 **M12** (same setup): the car is split into materials, so it is 5 body primitives (paint, glass, carbon, tail lights, head light bar) plus the liners, and 2 per wheel (tyre, rim), where M11 had one body, one liner and one per wheel primitive. That is 8 more draw calls, 16 with the shadow pass, which is the whole increase; triangles are unchanged (the light bar adds 96). Paint and carbon are `MeshPhysicalMaterial` with clearcoat and everything samples the sky HDRI's PMREM, and frames still sit at vsync, also with the CPU throttled. The sun's shadow box shrank from ±20 m to ±15 m at the same 2048² map, so shadow texels are 1.5 cm instead of 2 cm.
 
+**M13** (same setup): the post-processing chain is most of the +19 calls on the menu. Bloom's mipmap blur is a luminance pass plus a down- and upsample chain, then come the speed blur (its own pass, since it samples neighbouring pixels) and the final pass with vignette and tone mapping. These are full-screen passes, so their GPU cost grows with the canvas size, which these runs (1280×800) don't stress. The scene itself gained the two particle pools (embers, dust/smoke) and the tire marks (once there are any), lost the two thruster discs, and draws 6 more calls while thrusting (2 cones and a glow sprite per nozzle). None of the effects casts a shadow. The composer renders at the canvas resolution with 4× MSAA on a half-float target. On low settings (M18) the bloom could run at half resolution and the speed blur could be dropped.
+
 ## Bundle
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
 
-| Chunk         | Raw     | Gzip    | Notes                                                                                                       |
-| ------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                      |
-| `three`       | 1.10 MB | 301 kB  | three, R3F, drei and their helpers (M12 added drei's `<Environment>` and the HDR loader: +18 kB gzip)       |
-| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                 |
-| `index`       | 31 kB   | 12 kB   | the game                                                                                                    |
-| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                          |
-| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures |
-| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)              |
+| Chunk         | Raw     | Gzip    | Notes                                                                                                        |
+| ------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                       |
+| `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip) |
+| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                  |
+| `index`       | 46 kB   | 17 kB   | the game                                                                                                     |
+| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                           |
+| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures  |
+| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)               |
 
-The first load is about 3.6 MB gzipped: Rapier 842 kB, the car 1.42 MB, the sky 954 kB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.
+The first load is about 3.6 MB gzipped (M13 added ~30 kB): Rapier 842 kB, the car 1.42 MB, the sky 954 kB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.
 
 ## How to measure again
 

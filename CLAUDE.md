@@ -33,6 +33,7 @@ Local Node (alternative):
 - `scene/` — world: ground, lights, level geometry
 - `car/` — car physics and controls
 - `camera/` — chase / debug cameras
+- `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect
 - `input/` — input layer: keyboard and gamepads mapped to actions
 - `ui/` — HTML overlay (HUD, menus)
 - `state/` — Zustand stores

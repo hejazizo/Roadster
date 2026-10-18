@@ -29,11 +29,14 @@ Node names may only use letters, digits and `_`. three.js's GLTFLoader turns spa
 
 ### Materials
 
-Materials render as authored; three's GLTFLoader turns `KHR_materials_clearcoat`, `KHR_materials_emissive_strength` and `KHR_texture_transform` into `MeshPhysicalMaterial` settings, and the scene's sky HDRI gives them reflections. One material name means something to the code:
+Materials render as authored; three's GLTFLoader turns `KHR_materials_clearcoat`, `KHR_materials_emissive_strength` and `KHR_texture_transform` into `MeshPhysicalMaterial` settings, and the scene's sky HDRI gives them reflections.
+
+Two material names mean something to the code:
 
 - **`paint`** (optional): the recolourable paint. The game sets its base colour factor to the paint picked on the main menu (`src/config/paints.ts`), so its base colour texture should be grey: white where the paint is fully lit, darker only for shading and gaps. A model without it just keeps its own colours.
+- **`tail_light`** (optional): the tail lights, which should be emissive. Their emissive strength is tripled while braking, and the bloom makes them glow. A model without it has no brake lights.
 
-The hero car's other materials (`glass`, `carbon`, `head_light`, `tail_light`, `tyre`, `rim`, `arch_liner`) are names for people, not lookups.
+The hero car's other materials (`glass`, `carbon`, `head_light`, `tyre`, `rim`, `arch_liner`) are names for people, not lookups.
 
 ### Wheels
 
@@ -56,7 +59,7 @@ The code ignores the authored position and uses the physics position. That is th
 ### Thrusters
 
 - Each `thruster_*` empty sits at a nozzle's exit, with its **−Z axis pointing along the exhaust** (backwards on a rear nozzle, so normally no rotation).
-- For now, a placeholder glow disc is drawn at each one while boosting or gliding. M13 attaches the flame and heat VFX to the same nodes.
+- While boosting or gliding, an exhaust flame (two additive cones and a glow sprite, `src/vfx/ThrusterFlame.tsx`) is drawn along each one's −Z, with embers and heat trailing from it. The flame is sized for nozzles about 0.07 m in radius.
 
 ## Checks
 

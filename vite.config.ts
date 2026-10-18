@@ -18,7 +18,7 @@ export default defineConfig({
             { name: 'rapier', test: /node_modules[\\/]@dimforge[\\/]/ },
             {
               name: 'three',
-              test: /node_modules[\\/](three|three-stdlib|three-mesh-bvh|@react-three|@monogrid|troika-[^\\/]+|camera-controls|maath|meshline|stats-gl|stats\.js|suspend-react|its-fine)[\\/]/,
+              test: /node_modules[\\/](three|three-stdlib|three-mesh-bvh|@react-three|@monogrid|troika-[^\\/]+|camera-controls|maath|meshline|stats-gl|stats\.js|suspend-react|its-fine|postprocessing|n8ao)[\\/]/,
             },
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
           ],

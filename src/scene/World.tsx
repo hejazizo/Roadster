@@ -3,8 +3,10 @@ import { Suspense, useRef } from 'react'
 import type { Group } from 'three'
 import CameraRig from '../camera/CameraRig'
 import Car from '../car/Car'
+import { createTelemetry } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
 import { useRaceStore } from '../state/raceStore'
+import Effects from './Effects'
 import Level from './Level'
 import Lights from './Lights'
 import Race from './Race'
@@ -15,6 +17,7 @@ const SKY_COLOR = '#87ceeb'
 export default function World() {
   const carRef = useRef<RapierRigidBody>(null)
   const carVisualRef = useRef<Group>(null)
+  const telemetry = useRef(createTelemetry())
   const paused = useRaceStore((s) => s.paused)
 
   return (
@@ -26,12 +29,13 @@ export default function World() {
             Pausing skips whole steps, which freezes the car, the race clock and the rings. */}
         <Physics gravity={TUNING.world.gravity} updatePriority={-1} paused={paused}>
           <Level level={TEST_LEVEL} />
-          <Car ref={carRef} visualRef={carVisualRef} />
+          <Car ref={carRef} visualRef={carVisualRef} telemetry={telemetry} />
           <Race level={TEST_LEVEL} car={carRef} />
           {/* Inside Physics so the chase cam can raycast against the level. */}
-          <CameraRig target={carVisualRef} body={carRef} />
+          <CameraRig target={carVisualRef} body={carRef} telemetry={telemetry} />
         </Physics>
       </Suspense>
+      <Effects />
     </>
   )
 }

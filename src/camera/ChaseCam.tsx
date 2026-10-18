@@ -1,9 +1,12 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useRapier, type RapierRigidBody } from '@react-three/rapier'
-import { useRef, type RefObject } from 'react'
-import { MathUtils, Quaternion, Vector3, type Object3D } from 'three'
+import { useEffect, useRef, type RefObject } from 'react'
+import { MathUtils, PerspectiveCamera, Quaternion, Vector3, type Object3D } from 'three'
 import type { Ray } from '../car/respawn'
+import type { CarTelemetry } from '../car/telemetry'
 import { TUNING } from '../config/tuning'
+import { useCarStore } from '../state/carStore'
+import { useRaceStore } from '../state/raceStore'
 
 // Below this horizontal length the car points too far up/down to give a heading.
 const MIN_FLAT_FORWARD = 0.2
@@ -16,6 +19,7 @@ const forward = new Vector3()
 const desiredPos = new Vector3()
 const desiredLook = new Vector3()
 const toCamera = new Vector3()
+const shakeLook = new Vector3()
 
 // Shortest signed angle from a to b, in [-π, π].
 const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
@@ -23,21 +27,42 @@ const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.co
 // Frame-rate independent lerp factor for a damping rate.
 const dampFactor = (lambda: number, dt: number) => 1 - Math.exp(-lambda * dt)
 
+// Smooth noise in about −1…1; each seed gives an unrelated wave.
+const noise = (t: number, seed: number) =>
+  Math.sin(t * 23 + seed * 7.1) * 0.6 + Math.sin(t * 41 + seed * 3.3) * 0.4
+
 type ChaseCamProps = {
   // The car's interpolated visual, so the camera moves as smoothly as the rendered car.
   target: RefObject<Object3D | null>
   body: RefObject<RapierRigidBody | null>
+  telemetry: RefObject<CarTelemetry>
 }
 
 // Third-person camera behind and above the car. Follows the car's heading (not its
-// velocity), so reversing keeps the camera behind the nose.
-export default function ChaseCam({ target, body }: ChaseCamProps) {
+// velocity), so reversing keeps the camera behind the nose. Widens its view while
+// boosting and shakes on landings.
+export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
   const { world, rapier } = useRapier()
+  const get = useThree((s) => s.get)
   const ray = useRef<Ray | null>(null)
   const heading = useRef(0)
   const lookAt = useRef(new Vector3())
   const lastCarPos = useRef(new Vector3())
   const started = useRef(false)
+  // Camera position before the shake offset, which is the state the follow lerps from.
+  const steadyPos = useRef(new Vector3())
+  const shake = useRef({ trauma: 0, time: 0, landings: telemetry.current.landings })
+
+  // Leave the debug orbit cam with the normal field of view.
+  useEffect(
+    () => () => {
+      const { camera } = get()
+      if (!(camera instanceof PerspectiveCamera)) return
+      camera.fov = TUNING.camera.chase.fov
+      camera.updateProjectionMatrix()
+    },
+    [get],
+  )
 
   useFrame(({ camera }, dt) => {
     // Read per frame so live tuning applies.
@@ -54,9 +79,17 @@ export default function ChaseCam({ target, body }: ChaseCamProps) {
       minHeight,
       obstructionMargin,
       snapDistance,
+      fov,
+      boostFov,
+      fovDamping,
+      landingShake,
+      boostShake,
+      shakeDecay,
+      shakeOffset,
     } = TUNING.camera.chase
     const car = target.current
     if (!car) return
+    if (started.current) camera.position.copy(steadyPos.current)
     car.getWorldPosition(carPos)
     car.getWorldQuaternion(carQuat)
 
@@ -122,7 +155,38 @@ export default function ChaseCam({ target, body }: ChaseCamProps) {
       }
     }
 
-    camera.lookAt(lookAt.current)
+    // Shake: landings add trauma, boosting holds a little, and it decays over time. The
+    // offset is applied on top of the steady position, which the next frame starts from.
+    steadyPos.current.copy(camera.position)
+    const s = shake.current
+    const t = telemetry.current
+    const { boosting } = useCarStore.getState()
+    if (t.landings !== s.landings) s.trauma += t.landingImpact * landingShake
+    s.landings = t.landings
+    const paused = useRaceStore.getState().paused
+    if (!paused) {
+      s.time += dt
+      s.trauma = Math.max(s.trauma - shakeDecay * dt, boosting ? boostShake : 0)
+    }
+    if (teleported) s.trauma = 0
+    s.trauma = Math.min(s.trauma, 1)
+    const amount = s.trauma * s.trauma * shakeOffset
+    camera.position.x += noise(s.time, 0) * amount
+    camera.position.y += noise(s.time, 1) * amount
+    camera.position.z += noise(s.time, 2) * amount
+    shakeLook.set(noise(s.time, 3), noise(s.time, 4), noise(s.time, 5))
+    camera.lookAt(shakeLook.multiplyScalar(amount * 0.5).add(lookAt.current))
+
+    if (camera instanceof PerspectiveCamera && !paused) {
+      const targetFov = fov + (boosting ? boostFov : 0)
+      const next = started.current
+        ? MathUtils.damp(camera.fov, targetFov, fovDamping, dt)
+        : targetFov
+      if (Math.abs(next - camera.fov) > 1e-3) {
+        camera.fov = next
+        camera.updateProjectionMatrix()
+      }
+    }
     started.current = true
   })
 

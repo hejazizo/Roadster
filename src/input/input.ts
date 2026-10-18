@@ -47,6 +47,21 @@ export function onPress(listener: PressListener): () => void {
   }
 }
 
+// Vibrates every connected gamepad that supports it; strength 0–1. Does nothing without one.
+export function rumble(strength: number, ms: number) {
+  if (strength <= 0) return
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    const actuator = pad?.connected ? pad.vibrationActuator : undefined
+    actuator
+      ?.playEffect?.('dual-rumble', {
+        duration: ms,
+        strongMagnitude: Math.min(strength, 1),
+        weakMagnitude: Math.min(strength, 1) * 0.5,
+      })
+      .catch(() => {}) // unsupported or interrupted: rumble is only a nicety
+  }
+}
+
 const emit = (action: ButtonAction) => listeners.forEach((listener) => listener(action))
 
 const setDevice = (device: Device) => {

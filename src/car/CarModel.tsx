@@ -1,7 +1,6 @@
 import { useGLTF } from '@react-three/drei'
-import { useLayoutEffect, useMemo, type RefObject } from 'react'
+import { useImperativeHandle, useLayoutEffect, useMemo, type RefObject } from 'react'
 import {
-  DoubleSide,
   Quaternion,
   Vector3,
   type Group,
@@ -12,6 +11,7 @@ import {
 import { CAR_MODEL_URL } from '../config/assets'
 import { TUNING } from '../config/tuning'
 import { paintColor, usePaintStore } from '../state/paintStore'
+import ThrusterFlame from '../vfx/ThrusterFlame'
 
 const { wheels, suspension } = TUNING.car
 
@@ -20,14 +20,10 @@ const WHEEL_NODES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']
 const THRUSTER_PREFIX = 'thruster'
 // The recolourable material (optional): its base colour is set from the chosen paint.
 const PAINT_MATERIAL = 'paint'
+// The tail lights (optional): brightened while braking.
+const TAIL_LIGHT_MATERIAL = 'tail_light'
 // Dev check: wheel hubs further than this (m) from the physics wheels get a warning.
 const HUB_TOLERANCE = 0.05
-
-// Placeholder thruster glow: a disc just behind each thruster node, lit while boosting or gliding.
-const THRUSTER_COLOR = '#333333'
-const THRUSTER_GLOW = '#ff8c1a'
-const THRUSTER_RADIUS = 0.15
-const THRUSTER_OFFSET = 0.02 // m behind the node, so the disc doesn't z-fight the body
 
 type Pose = { position: Vector3; quaternion: Quaternion }
 
@@ -37,6 +33,7 @@ type CarParts = {
   wheels: (Object3D | undefined)[]
   thrusters: Pose[]
   paint: MeshStandardMaterial | null
+  tailLight: MeshStandardMaterial | null
 }
 
 // Warns about a model that breaks the spec, so a swapped-in model fails loudly in dev.
@@ -55,16 +52,22 @@ function checkWheel(name: string, node: Object3D | undefined, root: Object3D, i:
 
 function splitModel(scene: Group): CarParts {
   const root = scene.clone()
-  // The clone shares materials with the loader's cache, so the paint gets its own copy.
+  // The clone shares materials with the loader's cache, so the paint and tail lights,
+  // which change at runtime, get their own copies.
   let paint: MeshStandardMaterial | null = null
+  let tailLight: MeshStandardMaterial | null = null
   root.traverse((o) => {
     const mesh = o as Mesh
     if (!mesh.isMesh) return
     mesh.castShadow = true
     mesh.receiveShadow = true
-    if ((mesh.material as MeshStandardMaterial).name === PAINT_MATERIAL) {
-      paint ??= (mesh.material as MeshStandardMaterial).clone()
+    const material = mesh.material as MeshStandardMaterial
+    if (material.name === PAINT_MATERIAL) {
+      paint ??= material.clone()
       mesh.material = paint
+    } else if (material.name === TAIL_LIGHT_MATERIAL) {
+      tailLight ??= material.clone()
+      mesh.material = tailLight
     }
   })
   root.updateMatrixWorld(true)
@@ -73,7 +76,7 @@ function splitModel(scene: Group): CarParts {
   root.traverse((o) => {
     if (!o.name.startsWith(THRUSTER_PREFIX)) return
     const quaternion = o.getWorldQuaternion(new Quaternion())
-    const position = new Vector3(0, 0, -THRUSTER_OFFSET).applyMatrix4(o.matrixWorld)
+    const position = o.getWorldPosition(new Vector3())
     thrusters.push({ position, quaternion })
   })
 
@@ -86,19 +89,32 @@ function splitModel(scene: Group): CarParts {
     return node
   })
 
-  return { body: root, wheels: wheelNodes, thrusters, paint }
+  return { body: root, wheels: wheelNodes, thrusters, paint, tailLight }
 }
 
 type CarModelProps = {
   steerGroups: RefObject<(Group | null)[]>
   spinGroups: RefObject<(Group | null)[]>
-  thrusterMaterials: RefObject<(MeshStandardMaterial | null)[]>
+  nozzles: RefObject<(Group | null)[]>
+  thrust: RefObject<number>
+  tailLight: RefObject<MeshStandardMaterial | null>
 }
 
 // The car's look, loaded from the GLB. Visual only: the physics never reads the model.
-export default function CarModel({ steerGroups, spinGroups, thrusterMaterials }: CarModelProps) {
+export default function CarModel({
+  steerGroups,
+  spinGroups,
+  nozzles,
+  thrust,
+  tailLight,
+}: CarModelProps) {
   const { scene } = useGLTF(CAR_MODEL_URL)
   const parts = useMemo(() => splitModel(scene), [scene])
+  useImperativeHandle<MeshStandardMaterial | null, MeshStandardMaterial | null>(
+    tailLight,
+    () => parts.tailLight,
+    [parts],
+  )
   const paintId = usePaintStore((s) => s.paintId)
   useLayoutEffect(() => {
     parts.paint?.color.set(paintColor(paintId))
@@ -125,18 +141,16 @@ export default function CarModel({ steerGroups, spinGroups, thrusterMaterials }:
         </group>
       ))}
       {parts.thrusters.map(({ position, quaternion }, i) => (
-        <mesh key={i} position={position} quaternion={quaternion}>
-          <circleGeometry args={[THRUSTER_RADIUS, 16]} />
-          <meshStandardMaterial
-            ref={(m) => {
-              thrusterMaterials.current[i] = m
-            }}
-            color={THRUSTER_COLOR}
-            emissive={THRUSTER_GLOW}
-            emissiveIntensity={0}
-            side={DoubleSide}
-          />
-        </mesh>
+        <group
+          key={i}
+          position={position}
+          quaternion={quaternion}
+          ref={(g) => {
+            nozzles.current[i] = g
+          }}
+        >
+          <ThrusterFlame thrust={thrust} seed={i} />
+        </group>
       ))}
     </>
   )

@@ -9,8 +9,10 @@ import {
 import { Suspense, useEffect, useRef, type RefObject } from 'react'
 import { MathUtils, type Group, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
+import { rumble } from '../input/input'
 import { useCarStore } from '../state/carStore'
 import { isCarHeld, useRaceStore } from '../state/raceStore'
+import CarEffects from '../vfx/CarEffects'
 import {
   createAbilityState,
   resetAbilities,
@@ -19,12 +21,16 @@ import {
 } from './abilities'
 import CarModel from './CarModel'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
+import { resetTelemetry, stepTelemetry, type CarTelemetry } from './telemetry'
 import { released, useCarControls } from './useCarControls'
 
 const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
 
-// Thruster glow while boosting or gliding; dark otherwise, including when out of fuel.
-const THRUSTER_GLOW_INTENSITY = 3
+// Tail-light brightness while braking, as a multiple of the model's own.
+const BRAKE_LIGHT_BOOST = 3
+// Gamepad rumble: a short kick when boost starts, and a thump on landing scaled by impact.
+const BOOST_RUMBLE = { strength: 0.35, ms: 120 }
+const LANDING_RUMBLE = { strength: 1, ms: 180 }
 
 const isFront = (i: number) => i < 2
 
@@ -50,9 +56,11 @@ type CarProps = {
   ref: RefObject<RapierRigidBody | null>
   // The car's visual root, whose world transform is its interpolated pose (for the camera).
   visualRef: RefObject<Group | null>
+  // Landings, skids and braking for the effects and camera; written here every physics step.
+  telemetry: RefObject<CarTelemetry>
 }
 
-export default function Car({ ref, visualRef }: CarProps) {
+export default function Car({ ref, visualRef, telemetry }: CarProps) {
   const { world, rapier } = useRapier()
   const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
@@ -61,7 +69,12 @@ export default function Car({ ref, visualRef }: CarProps) {
   const abilities = useRef(createAbilityState())
   const safePoint = useRef(createSafePoint())
   const ray = useRef<Ray | null>(null)
-  const thrusterMaterials = useRef<(MeshStandardMaterial | null)[]>([])
+  // 0–1, smoothed from boosting/gliding; sizes the flames and embers.
+  const thrust = useRef(0)
+  const nozzles = useRef<(Group | null)[]>([])
+  const tailLight = useRef<MeshStandardMaterial | null>(null)
+  const tailLightBase = useRef<number | null>(null)
+  const feedback = useRef({ boosting: false, landings: telemetry.current.landings })
   const steerGroups = useRef<(Group | null)[]>([])
   const spinGroups = useRef<(Group | null)[]>([])
 
@@ -111,6 +124,7 @@ export default function Car({ ref, visualRef }: CarProps) {
       placeAtSafePoint(safePoint.current, body)
       steer.current = 0
       resetAbilities(abilities.current, body)
+      resetTelemetry(telemetry.current)
     }
 
     // Analog throttle: forces scale with how far the trigger (or key, fully) is pressed.
@@ -145,15 +159,35 @@ export default function Car({ ref, visualRef }: CarProps) {
     const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     vc.updateVehicle(world.timestep, solidOnly)
     stepAbilities(abilities.current, body, vc, c, world.timestep)
+    stepTelemetry(telemetry.current, body, vc, c, world.timestep)
     stepSafePoint(safePoint.current, body, vc, world, ray.current, solidOnly, world.timestep)
   })
 
   // Visual wheels follow the controller's suspension, steering and spin.
-  useFrame(() => {
+  useFrame((_, dt) => {
     const { fuel, grounded, boosting, gliding } = abilities.current
-    for (const m of thrusterMaterials.current) {
-      if (m) m.emissiveIntensity = boosting || gliding ? THRUSTER_GLOW_INTENSITY : 0
+    const t = telemetry.current
+    if (!useRaceStore.getState().paused) {
+      const { glideLevel, attack, release } = TUNING.vfx.flame
+      const target = boosting ? 1 : gliding ? glideLevel : 0
+      const rate = target > thrust.current ? attack : release
+      thrust.current = MathUtils.damp(thrust.current, target, rate, dt)
     }
+
+    const light = tailLight.current
+    if (light) {
+      tailLightBase.current ??= light.emissiveIntensity
+      light.emissiveIntensity = tailLightBase.current * (t.braking ? BRAKE_LIGHT_BOOST : 1)
+    }
+
+    const fb = feedback.current
+    if (boosting && !fb.boosting) rumble(BOOST_RUMBLE.strength, BOOST_RUMBLE.ms)
+    if (t.landings !== fb.landings) {
+      rumble(LANDING_RUMBLE.strength * t.landingImpact, LANDING_RUMBLE.ms)
+    }
+    fb.boosting = boosting
+    fb.landings = t.landings
+
     // Mirror the car's state for the HUD once per rendered frame.
     const v = ref.current?.linvel()
     useCarStore.setState({
@@ -176,24 +210,30 @@ export default function Car({ ref, visualRef }: CarProps) {
   })
 
   return (
-    <RigidBody
-      ref={ref}
-      colliders={false}
-      position={spawn.position}
-      rotation={[0, spawn.yaw, 0]}
-      canSleep={false}
-    >
-      <CuboidCollider args={chassis.halfExtents} mass={chassis.mass} />
-      {/* Outside the Suspense, so the camera has a target while the model loads. */}
-      <group ref={visualRef}>
-        <Suspense fallback={null}>
-          <CarModel
-            steerGroups={steerGroups}
-            spinGroups={spinGroups}
-            thrusterMaterials={thrusterMaterials}
-          />
-        </Suspense>
-      </group>
-    </RigidBody>
+    <>
+      <RigidBody
+        ref={ref}
+        colliders={false}
+        position={spawn.position}
+        rotation={[0, spawn.yaw, 0]}
+        canSleep={false}
+      >
+        <CuboidCollider args={chassis.halfExtents} mass={chassis.mass} />
+        {/* Outside the Suspense, so the camera has a target while the model loads. */}
+        <group ref={visualRef}>
+          <Suspense fallback={null}>
+            <CarModel
+              steerGroups={steerGroups}
+              spinGroups={spinGroups}
+              nozzles={nozzles}
+              thrust={thrust}
+              tailLight={tailLight}
+            />
+          </Suspense>
+        </group>
+      </RigidBody>
+      {/* World-space effects, outside the moving body. */}
+      <CarEffects body={ref} telemetry={telemetry} thrust={thrust} nozzles={nozzles} />
+    </>
   )
 }

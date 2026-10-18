@@ -30,7 +30,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 10  | Stable v0.1 & deploy           | 2 · Game    | ☑      |
 | 11  | Hero Roadster model            | 3 · Details | ☑      |
 | 12  | Lighting & materials           | 3 · Details | ☑      |
-| 13  | Thruster VFX & post-processing | 3 · Details | ☐      |
+| 13  | Thruster VFX & post-processing | 3 · Details | ☑      |
 | 14  | Audio                          | 3 · Details | ☐      |
 | 15  | Handling & flight polish       | 3 · Details | ☐      |
 | 16  | Real level art                 | 3 · Details | ☐      |
@@ -229,6 +229,21 @@ Each milestone here is independent enough to do in any order, apart from M11 →
 
 **Done when:** boosting and gliding feel powerful just from the visuals.
 
+✅ **Done:** `src/car/telemetry.ts` is stepped with physics after the abilities. It records landings (air time over 0.25 s and fall speed over 2 m/s, with an impact 0–1; teleports never count), a per-wheel skid from the sideways slip speed at the contact point plus a locked handbrake, and a braking flag. `src/vfx/` holds the effects:
+
+- `ThrusterFlame`: two additive HDR cones and a glow sprite per `thruster_*` node, sized to the vents, scaled by a smoothed thrust (boost 1, glide 0.55) and flickering; it replaces the disc.
+- `Particles`: one-draw-call world-space point pools for embers and heat behind the nozzles, landing dust and tyre smoke.
+- `TireMarks`: a ring buffer of 3000 quads following the contact normal.
+
+Everything freezes while paused and clears on restart. `src/scene/Effects.tsx` adds `@react-three/postprocessing`: mipmap bloom above luminance 1 (flames, embers, lights, the next ring), a custom radial speed blur (`SpeedBlurEffect`, edges only, from 20 m/s, stronger on boost), a vignette, then Neutral tone mapping, which moved here from the renderer. The chase cam widens 50° → 62° on boost and shakes on landings (trauma model, offset kept out of the follow lerp), and restores the FOV for the orbit cam. Tail lights triple while braking, and gamepads rumble on boost start and landings (`rumble()` in `src/input/input.ts`). Values are in `TUNING.vfx` and `camera.chase`, all in the tuning panel. Headless Chrome:
+
+- boost, glide, hop landing dust, handbrake marks and smoke, and brake lights all render;
+- paused frames are pixel-identical;
+- colours match M12 within 1/255 outside the vignette;
+- a scripted 3 s drive gives the same speed as HEAD (15.89 m/s);
+- a scripted pad gets rumbles, and a pad without an actuator throws nothing;
+- 60 fps also with CPU 4×, 79 / 75 avg / 85 max draw calls, +30 kB gzipped (`docs/performance.md`).
+
 ### M14 — Audio
 
 - Electric motor whine with pitch tied to speed, thruster burst and loop, landing thump, ring pickup, UI clicks, music.
@@ -298,15 +313,16 @@ Park later ideas here instead of building them early.
 - The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
-- Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons), rumble on landing and boost (M13/M15), and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data.
+- Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons) and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data. Rumble (M13) has no on/off setting yet — M18 settings.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
 - The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play (M15/M16).
 - The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
-- The placeholder thruster discs (0.15 m, dark when off) are bigger than the hero car's exhaust vents and cover them; M13's VFX should size the effect to the nozzles.
 - The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16/M19 if it matters).
-- The thruster glow is a flat disc per `thruster_*` node; M13 replaces it with flame/heat VFX at the same nodes.
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
-- Brake lights: the tail lights could brighten while braking (emissive strength from the throttle axis) — M13 with the bloom, or M15.
 - The sky HDRI is only used for lighting and reflections; the background is still the flat sky colour. Use it (or a matching skybox) as the background with the real level art — M16. Its sun is within 5° of `SUN_OFFSET`; keep them together.
 - The main menu card covers most of the car at spawn, so a paint change shows only on its rear. A garage/showroom view (camera orbiting the car beside the menu) would show it off — M17 with the level select, or M19.
 - Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16).
+- `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
+- Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
+- Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); per-surface colours and grip belong with surface types (M15/M16). Marks are drawn on any ground the wheels touch, including ramps.
+- The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.

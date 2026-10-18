@@ -124,6 +124,41 @@ export const TUNING = {
       minHeight: 0.5, // m above the surface below the camera
       obstructionMargin: 0.3, // m the camera stays in front of a wall between it and the car
       snapDistance: 10, // m the car moves in one frame (reset/respawn) that snaps the camera
+      fov: 50, // vertical field of view (degrees)
+      boostFov: 12, // extra degrees while boosting
+      fovDamping: 3,
+      // Shake: landings add trauma (0–1), which decays; the offset grows with trauma².
+      landingShake: 0.7, // trauma added by a full-strength landing
+      boostShake: 0.15, // trauma held while boosting
+      shakeDecay: 2.5, // trauma lost per second
+      shakeOffset: 0.3, // m of camera and aim offset at full trauma
+    },
+  },
+  // Visual effects driven by the car's state (src/vfx, src/scene/Effects.tsx).
+  vfx: {
+    landing: {
+      minAirTime: 0.25, // s airborne before touching down counts as a landing
+      minImpactSpeed: 2, // m/s fall speed of the weakest landing that kicks up dust
+      fullImpactSpeed: 10, // m/s fall speed of a full-strength landing
+    },
+    skid: {
+      minSlipSpeed: 2.5, // m/s sideways slide at a wheel where marks start
+      fullSlipSpeed: 7, // m/s sideways slide for the darkest marks
+      handbrakeMinSpeed: 4, // m/s a locked rear wheel leaves marks above
+    },
+    flame: {
+      length: 1.4, // m at full boost
+      glideLevel: 0.55, // flame size while only gliding, as a fraction of boost
+      attack: 18, // 1/s, how quickly the flame lights
+      release: 8, // 1/s, how quickly it dies down
+    },
+    post: {
+      bloomIntensity: 1.2,
+      bloomThreshold: 1, // luminance above which pixels bloom (only HDR emissives pass)
+      blurStartSpeed: 20, // m/s where the speed blur begins
+      blurFullSpeed: 45, // m/s where it reaches full strength
+      blurStrength: 1, // at full speed; boosting adds half again
+      vignette: 0.45, // darkness
     },
   },
 }

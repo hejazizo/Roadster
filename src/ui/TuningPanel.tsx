@@ -17,6 +17,10 @@ const SECTIONS: [string, Record<string, unknown>][] = [
   ['Air control', TUNING.car.airControl],
   ['Respawn', TUNING.car.respawn],
   ['Chase cam', TUNING.camera.chase],
+  ['Landing FX', TUNING.vfx.landing],
+  ['Skid FX', TUNING.vfx.skid],
+  ['Flame', TUNING.vfx.flame],
+  ['Post', TUNING.vfx.post],
   ['Input', TUNING.input],
 ]
 
