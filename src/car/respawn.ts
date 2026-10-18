@@ -8,6 +8,7 @@ const { spawn } = TUNING.car
 type Rapier = ReturnType<typeof useRapier>
 export type PhysicsWorld = Rapier['world']
 export type Ray = InstanceType<Rapier['rapier']['Ray']>
+export type QueryFlags = NonNullable<Parameters<PhysicsWorld['castRay']>[3]>
 
 export type SafePointState = {
   position: Vector3
@@ -38,6 +39,7 @@ function groundBelow(
   y: number,
   z: number,
   maxDist: number,
+  flags: QueryFlags,
 ) {
   ray.origin.x = x
   ray.origin.y = y
@@ -45,19 +47,21 @@ function groundBelow(
   ray.dir.x = 0
   ray.dir.y = -1
   ray.dir.z = 0
-  const hit = world.castRay(ray, maxDist, true, undefined, undefined, undefined, body)
+  const hit = world.castRay(ray, maxDist, true, flags, undefined, undefined, body)
   return hit ? y - hit.timeOfImpact : null
 }
 
 // Records the car's pose as the respawn point once it has been safe for a moment: upright,
 // all wheels down, and level ground for `edgeMargin` around it, so a respawn can't leave the
 // car hanging over a drop or on a ramp. Call after `updateVehicle` (fresh wheel contacts).
+// `flags` filter the ground probes (e.g. to skip sensors).
 export function stepSafePoint(
   state: SafePointState,
   body: RapierRigidBody,
   vc: VehicleController,
   world: PhysicsWorld,
   ray: Ray,
+  flags: QueryFlags,
   dt: number,
 ) {
   const { minSafeTime, minUpright, edgeMargin, flatTolerance } = TUNING.car.respawn
@@ -71,7 +75,7 @@ export function stepSafePoint(
   if (
     !allWheels ||
     up.y < minUpright ||
-    !onLevelGround(body, world, ray, edgeMargin, flatTolerance)
+    !onLevelGround(body, world, ray, flags, edgeMargin, flatTolerance)
   ) {
     state.safeTime = 0
     return
@@ -91,11 +95,12 @@ function onLevelGround(
   body: RapierRigidBody,
   world: PhysicsWorld,
   ray: Ray,
+  flags: QueryFlags,
   margin: number,
   tolerance: number,
 ) {
   const p = body.translation()
-  const under = groundBelow(world, ray, body, p.x, p.y, p.z, PROBE_DIST)
+  const under = groundBelow(world, ray, body, p.x, p.y, p.z, PROBE_DIST, flags)
   if (under === null) return false
 
   const fx = forward.x * margin
@@ -108,7 +113,7 @@ function onLevelGround(
     [-fz, fx],
   ]
   return offsets.every(([dx, dz]) => {
-    const y = groundBelow(world, ray, body, p.x + dx, p.y, p.z + dz, PROBE_DIST)
+    const y = groundBelow(world, ray, body, p.x + dx, p.y, p.z + dz, PROBE_DIST, flags)
     return y !== null && Math.abs(y - under) <= tolerance
   })
 }

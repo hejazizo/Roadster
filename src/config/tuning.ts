@@ -99,6 +99,10 @@ export const TUNING = {
       lift: 0.3, // m above the recorded pose to respawn at
     },
   },
+  race: {
+    countdown: 3, // s from restart to go; the car is held until then
+    ringDepth: 1, // m, thickness of a ring's sensor along its axis (read at mount)
+  },
   camera: {
     chase: {
       distance: 7, // m behind the car at rest

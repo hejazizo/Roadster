@@ -28,7 +28,7 @@ const KEY_MAP: Record<string, keyof CarControls> = {
   KeyR: 'reset',
 }
 
-const released = (): CarControls => ({
+export const released = (): CarControls => ({
   forward: false,
   backward: false,
   left: false,

@@ -92,17 +92,18 @@ export default function ChaseCam({ target, body }: ChaseCamProps) {
     if (!started.current || teleported) lookAt.current.copy(desiredLook)
     else lookAt.current.lerp(desiredLook, dampFactor(lookDamping, dt))
 
-    // Raycasts ignore the car itself.
+    // Raycasts ignore the car itself and sensors (rings).
     ray.current ??= new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 })
     const r = ray.current
     const carBody = body.current ?? undefined
+    const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
 
     // Stay above the surface below the camera, cast from above the car's height so
     // overhangs above the camera don't count.
     const top = carPos.y + height + 1
     r.origin = { x: camera.position.x, y: top, z: camera.position.z }
     r.dir = { x: 0, y: -1, z: 0 }
-    const ground = world.castRay(r, GROUND_PROBE, true, undefined, undefined, undefined, carBody)
+    const ground = world.castRay(r, GROUND_PROBE, true, solidOnly, undefined, undefined, carBody)
     if (ground) {
       camera.position.y = Math.max(camera.position.y, top - ground.timeOfImpact + minHeight)
     }
@@ -114,7 +115,7 @@ export default function ChaseCam({ target, body }: ChaseCamProps) {
     const camDist = toCamera.length()
     if (camDist > 0) {
       r.dir = toCamera.divideScalar(camDist)
-      const hit = world.castRay(r, camDist, true, undefined, undefined, undefined, carBody)
+      const hit = world.castRay(r, camDist, true, solidOnly, undefined, undefined, carBody)
       if (hit) {
         const d = Math.max(hit.timeOfImpact - obstructionMargin, 0)
         camera.position.copy(r.origin).addScaledVector(toCamera, d)

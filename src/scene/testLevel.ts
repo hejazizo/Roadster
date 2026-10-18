@@ -9,17 +9,22 @@ export type Box = { center: Vec3; size: Vec3 }
 // (the centre of its low edge). Its solid part reaches down to the ground.
 export type Ramp = { start: Vec3; yaw: number; run: number; rise: number; width: number }
 
+// A checkpoint ring standing upright at `center`, its hole facing along `yaw`.
+export type Ring = { center: Vec3; yaw: number; radius: number }
+
 export type Level = {
   ground: Box[] // walkable island slabs, top at y = 0; the void around them is out of bounds
   platforms: Box[]
   walls: Box[]
   ramps: Ramp[]
   road: { points: [number, number][]; width: number } // closed circuit, visual only
+  rings: Ring[] // time-trial checkpoints in order; the last one is the start/finish arch
 }
 
 const NORTH = Math.PI
 const SOUTH = 0
 const EAST = Math.PI / 2
+const WEST = -Math.PI / 2
 
 // Axis-aligned box from its extents.
 const box = (x0: number, x1: number, z0: number, z1: number, y0: number, y1: number): Box => ({
@@ -95,4 +100,16 @@ export const TEST_LEVEL: Level = {
   ],
 
   road: { points: roundedRect(0, -40, 95, 95, 25), width: 8 },
+
+  rings: [
+    { center: [12, 5, -57], yaw: NORTH, radius: 3.5 }, // off the big kicker
+    { center: [40, 4, -40], yaw: NORTH, radius: 3 }, // up the tower
+    { center: [78, 9, -90], yaw: NORTH, radius: 3 }, // hop the raised gap
+    // Out over the void, above where a hop without gliding can reach (needs fuel left).
+    { center: [78, 7, -190], yaw: NORTH, radius: 3.5 },
+    { center: [20, 2.5, -250], yaw: WEST, radius: 3.5 }, // along the north island
+    { center: [-40, 3, -160], yaw: SOUTH, radius: 3.5 }, // jump the 20 m gap back
+    { center: [-70, 2, -62], yaw: SOUTH, radius: 3.5 }, // through the chicane
+    { center: [0, 1, -8], yaw: NORTH, radius: 5 }, // start/finish arch, half buried
+  ],
 }

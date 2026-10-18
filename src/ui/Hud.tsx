@@ -1,6 +1,7 @@
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
 import './Hud.css'
+import RaceHud from './RaceHud'
 
 const MS_TO_KMH = 3.6
 
@@ -46,6 +47,7 @@ export default function Hud() {
         <Speed />
         <FuelBar />
       </div>
+      <RaceHud />
     </div>
   )
 }

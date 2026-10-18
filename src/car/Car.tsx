@@ -10,6 +10,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 import { MathUtils, type Group, type Mesh, type MeshStandardMaterial } from 'three'
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
+import { isCarHeld, useRaceStore } from '../state/raceStore'
 import {
   createAbilityState,
   resetAbilities,
@@ -17,7 +18,7 @@ import {
   type VehicleController,
 } from './abilities'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray } from './respawn'
-import { useCarControls } from './useCarControls'
+import { released, useCarControls } from './useCarControls'
 
 const { spawn, chassis, wheels, suspension, tires, engine, brake, steering } = TUNING.car
 
@@ -32,6 +33,9 @@ const THRUSTER_GLOW_INTENSITY = 3
 const [hx, hy, hz] = chassis.halfExtents
 
 const isFront = (i: number) => i < 2
+
+// Controls while the race holds the car at the start.
+const HELD = { ...released(), handbrake: true }
 
 // Applied every step so suspension and tire changes from the tuning panel take effect live.
 function applyWheelTuning(vc: VehicleController, i: number) {
@@ -57,6 +61,7 @@ export default function Car({ ref, visualRef }: CarProps) {
   const vehicle = useRef<VehicleController | null>(null)
   const steer = useRef(0)
   const resetHeld = useRef(false)
+  const runId = useRef(useRaceStore.getState().runId)
   const abilities = useRef(createAbilityState())
   const safePoint = useRef(createSafePoint())
   const ray = useRef<Ray | null>(null)
@@ -94,11 +99,17 @@ export default function Car({ ref, visualRef }: CarProps) {
     const vc = vehicle.current
     const body = ref.current
     if (!vc || !body || !ray.current) return
-    const c = controls.current
+    const race = useRaceStore.getState()
+    const c = isCarHeld(race.phase) ? HELD : controls.current
+
+    // A race restart forgets the safe point, so the car goes back to spawn.
+    const restarted = race.runId !== runId.current
+    runId.current = race.runId
+    if (restarted) safePoint.current.valid = false
 
     // R or falling out of the world puts the car back at its last safe point.
     const fell = body.translation().y < TUNING.world.killY
-    if ((c.reset && !resetHeld.current) || fell) {
+    if (restarted || (c.reset && !resetHeld.current) || fell) {
       placeAtSafePoint(safePoint.current, body)
       steer.current = 0
       resetAbilities(abilities.current, body)
@@ -130,9 +141,11 @@ export default function Car({ ref, visualRef }: CarProps) {
       vc.setWheelEngineForce(i, front ? 0 : engineForce)
       vc.setWheelBrake(i, !front && c.handbrake ? brake.handbrakeForce : brakeForce)
     }
-    vc.updateVehicle(world.timestep)
+    // Wheel rays and ground probes ignore sensors, so the car can't ride on a ring.
+    const solidOnly = rapier.QueryFilterFlags.EXCLUDE_SENSORS
+    vc.updateVehicle(world.timestep, solidOnly)
     stepAbilities(abilities.current, body, vc, c, world.timestep)
-    stepSafePoint(safePoint.current, body, vc, world, ray.current, world.timestep)
+    stepSafePoint(safePoint.current, body, vc, world, ray.current, solidOnly, world.timestep)
   })
 
   // Visual wheels follow the controller's suspension, steering and spin.

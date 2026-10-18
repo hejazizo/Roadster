@@ -6,6 +6,7 @@ import Car from '../car/Car'
 import { TUNING } from '../config/tuning'
 import Level from './Level'
 import Lights from './Lights'
+import Race from './Race'
 import { TEST_LEVEL } from './testLevel'
 
 const SKY_COLOR = '#87ceeb'
@@ -23,6 +24,7 @@ export default function World() {
         <Physics gravity={TUNING.world.gravity} updatePriority={-1}>
           <Level level={TEST_LEVEL} />
           <Car ref={carRef} visualRef={carVisualRef} />
+          <Race level={TEST_LEVEL} car={carRef} />
           {/* Inside Physics so the chase cam can raycast against the level. */}
           <CameraRig target={carVisualRef} body={carRef} />
         </Physics>

@@ -23,7 +23,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 3   | Boost, hop & glide             | 1 · Core    | ☑      |
 | 4   | Basic HUD                      | 1 · Core    | ☑      |
 | 5   | Greybox test world             | 1 · Core    | ☑      |
-| 6   | Ring time-trial loop           | 2 · Game    | ☐      |
+| 6   | Ring time-trial loop           | 2 · Game    | ☑      |
 | 7   | Menus & saved best times       | 2 · Game    | ☐      |
 | 8   | Input mapping & gamepad        | 2 · Game    | ☐      |
 | 9   | Placeholder car model (GLB)    | 2 · Game    | ☐      |
@@ -125,6 +125,8 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 - Restart key.
 
 **Done when:** you can complete a full run through all rings and get a final time.
+
+✅ **Done:** 7 rings + a start/finish arch as data in `TEST_LEVEL.rings`, rendered by `src/scene/Race.tsx` (visual-only torus + cylinder sensor; next ring glows gold, passed ones hide); `src/state/raceStore.ts` runs `ready → countdown → racing → finished` on physics time, counting only the next ring; Enter starts/restarts (car back to spawn, safe point cleared), the car is held until GO; `src/ui/RaceHud.tsx` shows timer, ring count and phase messages. Wheel, camera and respawn raycasts now skip sensors. Headless Rapier sim: every ring reachable; the void ring (7 m up, 40 m out) is hit by every hop + glide from 20–45 m/s and missed by every hop without gliding, and boosting on the run-up can leave too little fuel to cross.
 
 ### M7 — Menus & saved best times
 
@@ -259,5 +261,7 @@ Park later ideas here instead of building them early.
 - Console shows two deprecation warnings from libraries (`THREE.Clock` from R3F, Rapier init params); they should go away with library updates.
 - Respawn faces the way the car was heading, so after driving off an edge it faces the drop 4 m back; holding W drives straight off again. Consider facing away from the nearest edge, or a short input lockout — M15.
 - The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters (M15/M16).
-- A hold-R (or menu) "back to spawn" alongside R → last safe point, once M6/M7 add restart.
+- Enter now restarts the run from spawn (M6); a pause-menu Restart comes with M7.
 - The chase cam's wall pull-in is an instant clamp, so it can pop when a wall passes between car and camera; damp the release (not the pull-in) in M15.
+- Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
+- The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (M16).
