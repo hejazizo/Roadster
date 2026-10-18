@@ -36,7 +36,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.1 | Reveal: proving-ground greybox | 3 · Details | ☑      |
 | 16.2 | Reveal: suction & half-loop    | 3 · Details | ☑      |
 | 16.3 | Reveal: jets, air roll & drop  | 3 · Details | ☑      |
-| 16.4 | Reveal: fleet jump             | 3 · Details | ☐      |
+| 16.4 | Reveal: fleet jump             | 3 · Details | ☑      |
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☐      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☐      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
@@ -514,6 +514,57 @@ Headless Chrome, 13 checks:
 
 **Done when:** you can jump the whole fleet from flat ground with a roll and land upright, and clipping the semi is a real risk.
 
+✅ **Done:** decided at the start of the milestone that a "standing start" means lifting off **from rest just behind the sedan**, with the jets alone carrying the car over the row.
+
+- **Jets** (`TUNING.car.jets`):
+  - The forward push goes from 0.3 g to 1.2 g, and now fades with height like the lift (full within 3 m of the ground below, gone by 12 m or over a void), so the Test Track's gaps still need the glide.
+  - Lift drains 0.35 fuel/s instead of 0.4 (2.9 s on a full tank).
+  - Air roll is 30 rad/s² capped at 9 rad/s (was 14 and 5), so a full roll takes about 0.9 s.
+  - The ground probe also hits the parked cars' roofs, so the jets push off them as off the ground.
+- **The kickflip from rest:** hold lift 1.6 s (it climbs to ~10 m and speeds up to ~17 m/s), let go and roll one turn over the pickup and pod, then brake onto the asphalt ~45 m past the start. It uses about 0.76 of the tank, so there's no second jump without landing. With 1.2 s of lift the wheels clip the semi; 1.4 s clears it with ~1.4 m to spare.
+- **Fleet shapes** (`src/scene/fleetData.ts`):
+  - Each vehicle is a size plus two collider boxes following its silhouette: body and cabin, the pickup's cab and bed, the semi's 4 m cab over a 1.35 m chassis and deck. The overall sizes are the M16.1 ones.
+  - `parkCar` places one, and `Level.fleet` is now a list of parked cars (model, position, yaw, world boxes).
+- **Fleet models:** `scripts/build-fleet-models.ts` (`npm run model:fleet`, `make fleet-models`) builds them in code from the same numbers: a three-box sedan, a two-box crossover, an angular pickup with an open bed, a rounded pod and a cab-over semi tractor with tanks, stacks and a fifth wheel.
+  - Each is extruded side profiles, rounded boxes and cylinders in one mesh with one vertex-coloured material: 552 / 580 / 580 / 1,308 / 1,000 triangles, 62 kB in all.
+  - No badges or names, and the same bytes on the host and in Docker.
+  - `src/scene/Fleet.tsx` loads and preloads them, and puts their colliders on one fixed body tagged `userData.fleet`.
+- **Hits** (`telemetry.ts`):
+  - The chassis touching a parked car, or a wheel standing on one, counts as a hit after 0.3 s clear of the fleet (`hits`, `hitImpact` from the car's speed). The car bounces off and the run goes on.
+  - A hit plays `sfx.hit` (a body thud plus a metallic clank), shakes the camera (`camera.chase.hitShake`) and rumbles the pad. `hits` is mirrored to `carStore` for M16.5.
+  - New tuning-panel folder: _Hit FX_.
+- **Rings:** the course is now 7 rings through both stunts:
+  - up the half-loop run-up;
+  - a 1.6 m gate hanging under the inverted top (ridden upside down, its top hidden in the shell);
+  - the south end;
+  - up the fleet run-up;
+  - a ring 7 m above the pickup and pod;
+  - the north end;
+  - the start/finish arch, now on the road's west straight heading south.
+
+Sim (`npm run sim:car`), both modes, all checks pass:
+
+- **Fleet:**
+  - from rest: 0 hits, 1.00 turns, lands clean at 3.0–3.3 m/s with 3.0 m over the semi and 0.24 fuel left;
+  - from 20 m/s (lift 12 m before the sedan, roll at 3 m): 0 hits, lands clean at 3.2–3.6 m/s, 0.60 fuel left;
+  - 1.2 s of lift from rest hits the semi;
+  - hop + glide at 20 / 30 / 45 m/s from 0 / 5 / 10 m before the row never clears untouched;
+  - driving into the sedan at 20 / 30 m/s bounces off with hits counted.
+- **Ring course:** a driver with a loop pilot (25 m/s run-up, fans, the drop flown as in M16.3) and the 20 m/s kickflip finishes all 7 rings in order in 49.9 s with no hits.
+- **Unchanged checks:**
+  - Test Track: hop + glide + lift falls short of the 80 m gap up to 35 m/s, as before; lift-off at the edge + glide lands 92–97 m out (was 87–91).
+  - The half-loop drop from 22 / 25 m/s lands clean at 10.4–11.1 / 3.6–5.0 m/s (was 12–13 / 4.3–6.1).
+  - Air-roll and lift-off checks match within noise.
+
+Headless Chrome, 9 checks:
+
+- the five models load with no page errors or model warnings;
+- driving into the sedan gives one hit and one hit sound;
+- a key-press kickflip from rest clears the row (0 hits, clean, 1.12 turns, 0.24 fuel) and passes the ring above the fleet;
+- the same with 1.15 s of lift clips a car;
+- 60 fps, 73 draw calls at the Proving Ground spawn (as in M16.3), 67 beside the fleet;
+- the Test Track 3 s drive gives 15.73 m/s.
+
 ### M16.5 — Reveal: stunt run mode
 
 - **Reveal run:** a second mode on the Proving Ground, next to its ring time trial, that follows the event: _half-loop → inverted hold → drop & roll → clean landing → fleet jump with kickflip → finish line_. Steps are ordered checkpoints in the race store (a new mode alongside the ring course; the `ready → countdown → racing → finished` phases stay).
@@ -611,10 +662,16 @@ Park later ideas here instead of building them early.
   - Climbing from a crawl needs boost the whole way and empties the tank by the end of a 3 s hold; M16.5 scoring should allow for that (or the separate air tank from the reveal ideas).
 - A safe point can be recorded on the first metres of the loop's clothoid entry (it's level within `flatTolerance`), so R after a loop attempt can put the car at the ramp's foot facing it. Harmless so far; tighten the probe if it bites.
 - The bump stop also acts on the Test Track kickers' faces: launches moved 1–2.5 m. Every ring and gap check still passes.
-- Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's south straight, east of spawn.
+- Both levels spawn at the origin facing north; the Proving Ground's start/finish arch sits on the visual road's west straight (M16.4), away from spawn.
 - Jets (M16.3):
-  - **Shared fuel is tight for the drop.** A 25 m/s approach reaches the lip with 0.46 fuel and lands with ~0.1; slower approaches park short of the top and crawl, and arrive empty. M16.4 balances fuel for the fleet jump; M16.5 scoring may want the separate air tank from the reveal ideas.
+  - **Shared fuel is tight for the drop.** A 25 m/s approach reaches the lip with 0.46 fuel and lands with ~0.15 (M16.4's cheaper lift); slower approaches park short of the top and crawl, and arrive empty. M16.5 scoring may want the separate air tank from the reveal ideas.
   - `clean` covers any wheel landing under lift up to the 14 m/s bad threshold, so a firm one counts; M16.5 scoring could grade softness.
   - The roll jets are visual: the roll is a torque on the body, with no side force.
   - Lift fades to nothing by 12 m above the ground and over voids (ground effect); if a later level needs the jets high up, give it its own floor or raise `fadeHeight`.
+- Fleet jump (M16.4):
+  - The jets push off the parked cars' roofs (the ground probe hits them), which is part of what carries a standstill lift-off over the row. A probe that ignored the fleet would need a stronger forward push.
+  - The forward push is 1.2 g near the ground, as strong as boost; a lift-off is also a quick way to gain speed on flat ground, at the cost of fuel.
+  - `hitImpact` comes from the car's speed, not the speed into the contact, and holding the throttle against a parked car counts a new hit after every 0.3 s bounce; M16.5 scoring may want a severity or a cap per run.
+  - The fleet models are one vertex-coloured material each: no emissive lamps or glossy glass yet (M16.6), and the semi's cab is a plain box from behind.
+  - The sim's kickflip driver times its roll by lift time (from rest) or wheel height (from a run-up); the window is narrow on purpose (1.2 s clips, 1.4 s clears), so a Beginner aid (e.g. a lift hint on the HUD) may help in M16.5.
   - The first physics step's ground probe can't hit anything (the query structures aren't built yet), so height reads ∞ for one step; the HUD shows "—".

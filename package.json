@@ -12,6 +12,7 @@
     "format:check": "prettier --check .",
     "model:car": "node scripts/build-car-model.ts",
     "model:car:kenney": "node scripts/build-car-model-kenney.ts",
+    "model:fleet": "node scripts/build-fleet-models.ts",
     "sim:car": "node scripts/sim-car.ts"
   },
   "dependencies": {

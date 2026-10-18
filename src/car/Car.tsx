@@ -32,9 +32,11 @@ const { chassis, wheels, suspension } = TUNING.car
 
 // Tail-light brightness while braking, as a multiple of the model's own.
 const BRAKE_LIGHT_BOOST = 3
-// Gamepad rumble: a short kick when boost starts, and a thump on landing scaled by impact.
+// Gamepad rumble: a short kick when boost starts, and a thump on landing or hitting a parked car
+// scaled by impact.
 const BOOST_RUMBLE = { strength: 0.35, ms: 120 }
 const LANDING_RUMBLE = { strength: 1, ms: 180 }
+const HIT_RUMBLE = { strength: 0.8, ms: 140 }
 
 // Controls while the race holds the car at the start.
 const HELD = { ...released(), handbrake: true }
@@ -74,7 +76,11 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps
   const jetNozzles = useRef<(Group | null)[]>([])
   const tailLight = useRef<MeshStandardMaterial | null>(null)
   const tailLightBase = useRef<number | null>(null)
-  const feedback = useRef({ boosting: false, landings: telemetry.current.landings })
+  const feedback = useRef({
+    boosting: false,
+    landings: telemetry.current.landings,
+    hits: telemetry.current.hits,
+  })
   const steerGroups = useRef<(Group | null)[]>([])
   const spinGroups = useRef<(Group | null)[]>([])
 
@@ -171,8 +177,10 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps
       const strength = t.landingKind === 'bad' ? 1 : t.landingImpact
       rumble(LANDING_RUMBLE.strength * strength, LANDING_RUMBLE.ms)
     }
+    if (t.hits !== fb.hits) rumble(HIT_RUMBLE.strength * (0.3 + 0.7 * t.hitImpact), HIT_RUMBLE.ms)
     fb.boosting = boosting
     fb.landings = t.landings
+    fb.hits = t.hits
 
     // Mirror the car's state for the HUD once per rendered frame. Speed is along the car's
     // plane, so it reads the same on a wall as on the floor.
@@ -202,6 +210,7 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps
       rollTurns: t.rollTurns,
       landings: t.landings,
       landingKind: t.landingKind,
+      hits: t.hits,
     })
     const vc = vehicle.current
     if (!vc) return

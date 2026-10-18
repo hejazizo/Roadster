@@ -10,6 +10,7 @@ import {
 import { useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, DoubleSide, Float32BufferAttribute, Vector3 } from 'three'
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
+import Fleet from './Fleet'
 import {
   loopMesh,
   rampVertices,
@@ -29,7 +30,6 @@ const SURFACE_COLORS: Record<
 const PLATFORM_COLOR = '#9a9a9a'
 const WALL_COLOR = '#c8b48a'
 const RAMP_COLOR = '#e8892c'
-const FLEET_COLOR = '#5d86b0'
 const ROAD_COLOR = '#3a3a3a'
 // Small lifts above the ground so overlays don't z-fight with it.
 const GRID_LIFT = 0.01
@@ -147,10 +147,8 @@ export default function Level({ level }: { level: LevelData }) {
         {level.loops.map((loop, i) => (
           <LoopPiece key={`loop-${i}`} loop={loop} />
         ))}
-        {level.fleet.map((piece, i) => (
-          <BoxPiece key={`fleet-${i}`} {...piece} color={FLEET_COLOR} />
-        ))}
       </RigidBody>
+      <Fleet cars={level.fleet} />
       {/* Grid lines make motion visible on the flat ground. */}
       {level.ground.map(({ center: [x, y, z], size: [sx, sy, sz] }, i) => (
         <Grid

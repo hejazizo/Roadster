@@ -20,6 +20,7 @@ export type CarState = {
   rollTurns: number // since leaving the ground, + left side up
   landings: number // bumped on every landing
   landingKind: LandingKind // of the last one
+  hits: number // parked cars clipped since the page loaded
 }
 
 // Read-only mirror of the car's state for the UI. The car owns the real state (in refs,
@@ -41,4 +42,5 @@ export const useCarStore = create<CarState>(() => ({
   rollTurns: 0,
   landings: 0,
   landingKind: 'wheels',
+  hits: 0,
 }))

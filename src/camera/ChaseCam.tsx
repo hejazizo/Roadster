@@ -63,7 +63,12 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
   // How far from the car's look point the camera may be: cut short at once by a wall, eased
   // back out after it, so a wall passing between doesn't make the camera pop in and out.
   const reach = useRef(Infinity)
-  const shake = useRef({ trauma: 0, time: 0, landings: telemetry.current.landings })
+  const shake = useRef({
+    trauma: 0,
+    time: 0,
+    landings: telemetry.current.landings,
+    hits: telemetry.current.hits,
+  })
 
   // Leave the debug orbit cam with world up and the normal field of view.
   useEffect(
@@ -101,6 +106,7 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
       shakeDecay,
       shakeOffset,
       badLandingShake,
+      hitShake,
       surfaceAngleStart,
       surfaceAngleFull,
       upDamping,
@@ -210,7 +216,7 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
       }
     }
 
-    // Shake: landings add trauma, boosting holds a little, and it decays over time. The
+    // Shake: landings and hits add trauma, boosting holds a little, and it decays over time. The
     // offset is applied on top of the steady position, which the next frame starts from.
     steadyPos.current.copy(camera.position)
     const s = shake.current
@@ -219,7 +225,9 @@ export default function ChaseCam({ target, body, telemetry }: ChaseCamProps) {
     if (t.landings !== s.landings) {
       s.trauma += t.landingImpact * landingShake + (t.landingKind === 'bad' ? badLandingShake : 0)
     }
+    if (t.hits !== s.hits) s.trauma += (0.3 + 0.7 * t.hitImpact) * hitShake
     s.landings = t.landings
+    s.hits = t.hits
     const paused = useRaceStore.getState().paused
     if (!paused) {
       s.time += dt

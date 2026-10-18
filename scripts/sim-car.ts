@@ -23,6 +23,7 @@ const { TEST_LEVEL } = await import('../src/scene/testLevel.ts')
 const { PROVING_GROUND } = await import('../src/scene/provingGround.ts')
 const { loopMesh, loopProfile, rampVertices } = await import('../src/scene/levelData.ts')
 type Level = import('../src/scene/levelData.ts').Level
+type Box = import('../src/scene/levelData.ts').Box
 const { createAbilityState, stepAbilities } = await import('../src/car/abilities.ts')
 const { createDrivingState, stepDriving } = await import('../src/car/handling.ts')
 const { createTelemetry, stepTelemetry } = await import('../src/car/telemetry.ts')
@@ -56,11 +57,16 @@ function createWorld(ground: Ground) {
     return { world, rings, loops }
   }
   const level = ground
-  const boxes = [...level.ground, ...level.platforms, ...level.walls, ...level.fleet]
-  for (const { center, size } of boxes) {
-    world.createCollider(
-      RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2).setTranslation(...center),
-    )
+  const cuboid = ({ center, size }: Box) =>
+    RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2).setTranslation(...center)
+  for (const piece of [...level.ground, ...level.platforms, ...level.walls]) {
+    world.createCollider(cuboid(piece))
+  }
+  // As Fleet.tsx: the parked cars on their own fixed body, tagged so telemetry counts hits.
+  const fleetBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
+  fleetBody.userData = { fleet: true }
+  for (const piece of level.fleet.flatMap((car) => car.boxes)) {
+    world.createCollider(cuboid(piece), fleetBody)
   }
   for (const ramp of level.ramps) {
     const points = new Float32Array(rampVertices(ramp).flat())
@@ -806,33 +812,86 @@ function pursue(sim: Sim, x: number, z: number, speed: number): CarControls {
   })
 }
 
+// Rides the half-loop as a player would: a 25 m/s run-up (boosting to hold it), throttle and
+// fans up the ramp and over the inverted top, then the drop off the lip flown as in dropDriver.
+// Returns undefined once it has landed.
+function loopPilot(loop: Level['loops'][number], speed = 25) {
+  let phase: 'approach' | 'ramp' | 'drop' = 'approach'
+  let landings = 0
+  return (sim: Sim): CarControls | undefined => {
+    const { p, flatSpeed } = pose(sim)
+    const t = sim.telemetry
+    if (phase === 'approach' && p.y > 1.5) phase = 'ramp'
+    if (phase === 'ramp' && !t.touching) {
+      phase = 'drop'
+      landings = t.landings
+    }
+    if (phase === 'drop' && t.landings !== landings) return undefined
+    if (phase === 'approach') {
+      const c = pursue(sim, loop.start[0], loop.start[2] - 10, speed)
+      return { ...c, boost: flatSpeed < speed - 1 }
+    }
+    return phase === 'ramp' ? drive({ throttle: 1, fans: true }) : dropDriver(sim)
+  }
+}
+
 // Drives the ring course in order: lines up on each ring's axis from 12 m out, then aims
-// through it to 10 m beyond.
+// through it to 10 m beyond. The gate under the half-loop's top is ridden with loopPilot and
+// the ring above the fleet flown with the kickflip from a 20 m/s run-up.
 function ringCourse(level: Level) {
   const { spawn, rings } = level
+  const loop = level.loops[0]
+  const span = fleetSpan(level)
   const sim = createSim(level, [spawn.position[0], REST, spawn.position[2]], spawn.yaw)
   let next = 0
   let lined = false
-  let minUp = 1
   let fell = false
-  while (sim.time < 150 && next < rings.length) {
+  let stunt: ((sim: Sim) => CarControls | undefined) | undefined
+  let stuntFor = -1
+  while (sim.time < 200 && next < rings.length) {
     const { center, yaw } = rings[next]
+    const inLoop = loop && Math.abs(center[0] - loop.start[0]) < 3 && center[1] > 5
+    const overFleet = Math.abs(center[0] - span.x) < 3 && center[2] < span.tail && center[1] > 4
+    if ((inLoop || overFleet) && stuntFor !== next) {
+      stuntFor = next
+      if (inLoop) stunt = loopPilot(loop)
+      else {
+        const jump = jumpPilot(span, 20, { rollHeight: 3 })
+        let landings = sim.telemetry.landings
+        let flying = false
+        stunt = (s) => {
+          flying ||= !s.telemetry.touching
+          if (flying && s.telemetry.landings !== landings) return undefined
+          landings = s.telemetry.landings
+          return jump(s)
+        }
+      }
+    }
     const dx = Math.sin(yaw)
     const dz = Math.cos(yaw)
     const p = sim.body.translation()
     const entry = [center[0] - dx * 12, center[2] - dz * 12]
     if (!lined && Math.hypot(entry[0] - p.x, entry[1] - p.z) < 6) lined = true
     const [tx, tz] = lined ? [center[0] + dx * 10, center[2] + dz * 10] : entry
-    sim.step(pursue(sim, tx, tz, 20))
+    const flown = stunt?.(sim)
+    if (stunt && !flown) stunt = undefined
+    sim.step(flown ?? pursue(sim, tx, tz, 20))
     if (sim.world.intersectionPair(sim.collider, sim.rings[next])) {
       next++
       lined = false
     }
-    minUp = Math.min(minUp, pose(sim).up.y)
+    // A stunt that ended without its ring is a miss.
+    if (stuntFor === next && !stunt && !flown) break
     if (sim.body.translation().y < TUNING.world.killY) fell = true
     if (fell) break
   }
-  const result = { done: next === rings.length, next, time: sim.time, minUp, fell }
+  const result = {
+    done: next === rings.length,
+    next,
+    time: sim.time,
+    fell,
+    hits: sim.telemetry.hits,
+  }
   sim.free()
   return result
 }
@@ -841,24 +900,152 @@ function ringCourse(level: Level) {
 const insidePad = (p: { x: number; y: number; z: number }) =>
   p.y > TUNING.world.killY && Math.abs(p.x) < 110 && p.z > -340 && p.z < 40
 
-function provingGround() {
-  const level = PROVING_GROUND
-  section('Proving Ground')
-  const course = ringCourse(level)
-  check(
-    'ring course completes in order',
-    course.done && !course.fell && course.minUp > 0.5,
-    `${course.next}/${level.rings.length} rings, ${f1(course.time)} s, min up ${f2(course.minUp)}`,
-  )
+// ---------------------------------------------------------------- the fleet jump
 
-  halfLoop(level)
-  lipDrop(level)
+// The row's extent along its (north) heading, from its colliders.
+function fleetSpan(level: Level) {
+  const boxes = level.fleet.flatMap((car) => car.boxes)
+  const semi = level.fleet[level.fleet.length - 1]
+  return {
+    x: level.fleet[0].position[0],
+    tail: Math.max(...boxes.map((b) => b.center[2] + b.size[2] / 2)), // sedan's tail
+    nose: Math.min(...boxes.map((b) => b.center[2] - b.size[2] / 2)), // semi's nose
+    semiTail: Math.max(...semi.boxes.map((b) => b.center[2] + b.size[2] / 2)),
+    semiTop: Math.max(...semi.boxes.map((b) => b.center[1] + b.size[1] / 2)),
+  }
+}
 
-  // The fleet: driving into the back of the row bounces off the first car.
-  const sedanTail = level.fleet[0].center[2] + level.fleet[0].size[2] / 2
+type JumpStart = 'standing' | number
+
+type JumpOptions = { rollHeight?: number; rollAfter?: number; liftAt?: number }
+
+// The kickflip over the fleet as a player flies it: lift off (from rest just behind the row,
+// or from a run-up at `start` m/s, lifting `liftAt` m before the sedan's tail), let go of lift
+// and roll one full turn once the wheels are `rollHeight` m up or after `rollAfter` s of lift,
+// then brake the fall with lift.
+function jumpPilot(
+  span: ReturnType<typeof fleetSpan>,
+  start: JumpStart,
+  { rollHeight = Infinity, rollAfter = Infinity, liftAt = 12 }: JumpOptions = {},
+) {
+  const half = chassis.halfExtents[2]
+  let phase: 'approach' | 'lift' | 'roll' | 'brake' = start === 'standing' ? 'lift' : 'approach'
+  let liftStart = NaN
+  return (sim: Sim): CarControls => {
+    const { p, forward } = pose(sim)
+    const t = sim.telemetry
+    const w = sim.body.angvel()
+    const spin = (w.x * forward.x + w.y * forward.y + w.z * forward.z) / (Math.PI * 2)
+    if (phase === 'approach' && p.z - half < span.tail + liftAt) phase = 'lift'
+    if (phase === 'lift' && isNaN(liftStart)) liftStart = sim.time
+    if (phase === 'lift' && (t.height > rollHeight || sim.time - liftStart >= rollAfter))
+      phase = 'roll'
+    if (phase === 'roll' && Math.abs(1 - t.rollTurns) < 0.05 && Math.abs(spin) < 0.3)
+      phase = 'brake'
+    if (phase === 'approach') return pursue(sim, span.x, span.nose - 50, start as number)
+    if (phase === 'lift') return drive({ lift: true })
+    if (phase === 'roll')
+      return drive({ airRoll: true, steer: clamp1((1 - t.rollTurns) * 12 - spin * 2.5) })
+    return cushion(sim)
+  }
+}
+
+// Flies the kickflip and reports hits, the height over the semi and the first landing.
+function fleetJumpRun(level: Level, start: JumpStart, options: JumpOptions = {}) {
+  const span = fleetSpan(level)
+  const half = chassis.halfExtents[2]
+  const standing = start === 'standing'
+  const z0 = standing ? span.tail + 1 + half : span.tail + 60
+  const sim = createSim(level, [span.x, REST, z0], NORTH, standing ? 0 : start)
+  // Settle on the springs first, as a parked car would be.
+  if (standing) for (let i = 0; i < 60; i++) sim.step(drive({ handbrake: true }))
+  const pilot = jumpPilot(span, start, options)
+  let landings = 0
+  let landing: { kind: string; speed: number; z: number; turns: number } | undefined
+  let minOverSemi = Infinity // lowest chassis centre while over the semi
+  let liftTime = 0
+  let fuelAtLanding = NaN
+  let airborne = false
+  while (sim.time < 13 && !landing) {
+    const { p } = pose(sim)
+    sim.step(pilot(sim))
+    if (sim.abilities.lifting) liftTime += DT
+    airborne ||= !sim.telemetry.touching
+    if (p.z < span.semiTail && p.z > span.nose) minOverSemi = Math.min(minOverSemi, p.y)
+    if (airborne && sim.telemetry.landings !== landings) {
+      landing = {
+        kind: sim.telemetry.landingKind,
+        speed: sim.telemetry.landingSpeed,
+        z: sim.body.translation().z,
+        turns: sim.telemetry.rollTurns,
+      }
+      fuelAtLanding = sim.abilities.fuel
+    }
+    landings = sim.telemetry.landings
+  }
+  // Let it settle.
+  for (let i = 0; i < 120; i++) sim.step(drive({ throttle: -0.3 }))
+  const result = {
+    hits: sim.telemetry.hits,
+    landing,
+    beyond: landing !== undefined && landing.z + half < span.nose,
+    upright: pose(sim).up.y,
+    overSemi: minOverSemi - span.semiTop,
+    liftTime,
+    fuelAtLanding,
+    rings: [...sim.ringsHit],
+  }
+  sim.free()
+  return result
+}
+
+const clears = (r: ReturnType<typeof fleetJumpRun>) =>
+  r.hits === 0 &&
+  r.beyond &&
+  r.landing!.kind !== 'bad' &&
+  Math.abs(Math.abs(r.landing!.turns) - 1) < 0.15 &&
+  r.upright > 0.95
+
+// Hop `hopAt` m before the sedan's tail at `speed` m/s (boosting to hold it) and glide until
+// landing: hits on the way and whether it came down beyond the row.
+function hopGlideRun(level: Level, speed: number, hopAt: number) {
+  const span = fleetSpan(level)
+  const half = chassis.halfExtents[2]
+  const sim = createSim(level, [span.x, REST, span.tail + 60], NORTH, speed)
+  let hopped = false
+  let landed = false
+  let landings = 0
+  while (sim.time < 10 && !landed) {
+    const { p, flatSpeed } = pose(sim)
+    const hopNow: boolean = !hopped && p.z - half < span.tail + hopAt
+    hopped ||= hopNow
+    const c = pursue(sim, span.x, span.nose - 50, speed)
+    sim.step({ ...c, boost: flatSpeed < speed - 1, hopPressed: hopNow, hop: hopped })
+    if (hopped && sim.telemetry.landings !== landings) landed = true
+    landings = sim.telemetry.landings
+  }
+  const result = { hits: sim.telemetry.hits, beyond: sim.body.translation().z + half < span.nose }
+  sim.free()
+  return result
+}
+
+// Brakes the fall with lift only as much as it needs to touch down at a few m/s.
+function cushion(sim: Sim): CarControls {
+  const down = -sim.body.linvel().y
+  const brake = 0.5 * (TUNING.car.jets.liftG - 1) * -TUNING.world.gravity[1]
+  return drive({ lift: down > Math.sqrt(2 * brake * Math.max(sim.telemetry.height, 0)) + 2 })
+}
+
+const jumpLine = (r: ReturnType<typeof fleetJumpRun>) =>
+  `${r.hits} hits, ${r.landing ? `${r.landing.kind} at ${f1(r.landing.speed)} m/s, ${f2(r.landing.turns)} turns` : 'no landing'}, ` +
+  `over semi ${Number.isFinite(r.overSemi) ? `${f1(r.overSemi)} m` : '—'}, lift ${f1(r.liftTime)} s, fuel left ${f2(r.fuelAtLanding)}`
+
+function fleet(level: Level) {
+  section('Proving Ground: fleet')
+  const span = fleetSpan(level)
+  // Driving into the back of the row bounces off the first car, and counts a hit.
   for (const v of [20, 30]) {
-    const x = level.fleet[0].center[0]
-    const sim = createSim(level, [x, REST, sedanTail + 40], NORTH, v)
+    const sim = createSim(level, [span.x, REST, span.tail + 40], NORTH, v)
     let minZ = Infinity
     let minUp = 1
     while (sim.time < 5) {
@@ -868,12 +1055,56 @@ function provingGround() {
     }
     const end = sim.body.translation()
     check(
-      `fleet at ${v} m/s: stopped by the first car`,
-      minZ > sedanTail - 1 && insidePad(end),
-      `nose reaches z ${f1(minZ - TUNING.car.chassis.halfExtents[2])} (sedan tail ${f1(sedanTail)}), min up ${f2(minUp)}`,
+      `drive into the fleet at ${v} m/s: bounces off`,
+      minZ > span.tail - 1 && insidePad(end) && sim.telemetry.hits >= 1,
+      `nose reaches z ${f1(minZ - chassis.halfExtents[2])} (sedan tail ${f1(span.tail)}), ${sim.telemetry.hits} hits, min up ${f2(minUp)}`,
     )
     sim.free()
   }
+
+  // The kickflip: lift + one roll clears the row and lands upright beyond it. From rest the
+  // car lifts for 1.6 s before rolling; it should take most of a tank, but not all of it.
+  const rest = fleetJumpRun(level, 'standing', { rollAfter: 1.6 })
+  check(
+    'fleet jump from rest: clears with a roll',
+    clears(rest) && rest.fuelAtLanding > 0.1 && rest.fuelAtLanding < 0.45,
+    jumpLine(rest),
+  )
+  const run = fleetJumpRun(level, 20, { rollHeight: 3 })
+  check('fleet jump from 20 m/s: clears with a roll', clears(run), jumpLine(run))
+  // Cutting the lift short clips the semi, the tallest and last.
+  const short = fleetJumpRun(level, 'standing', { rollAfter: 1.2 })
+  check('fleet jump from rest, 1.2 s of lift: hits', short.hits > 0, jumpLine(short))
+
+  // Hop + glide can't get over the semi: no speed or take-off point clears the row untouched.
+  const glides: string[] = []
+  for (const v of [20, 30, 45]) {
+    for (const hopAt of [0, 5, 10]) {
+      const r = hopGlideRun(level, v, hopAt)
+      glides.push(`${v}/${hopAt}:${r.hits === 0 && r.beyond ? 'CLEARS' : r.hits}`)
+    }
+  }
+  check(
+    'fleet: hop + glide never clears untouched',
+    !glides.some((g) => g.endsWith('CLEARS')),
+    `hits by speed/hop m before the row: ${glides.join(' ')}`,
+  )
+}
+
+function provingGround() {
+  const level = PROVING_GROUND
+  section('Proving Ground')
+  const course = ringCourse(level)
+  check(
+    'ring course completes in order, both stunts',
+    course.done && !course.fell && course.hits === 0,
+    `${course.next}/${level.rings.length} rings, ${f1(course.time)} s, ${course.hits} fleet hits`,
+  )
+
+  halfLoop(level)
+  lipDrop(level)
+
+  fleet(level)
 
   // The perimeter wall holds a boosted car.
   const sim = createSim(level, [0, REST, -150], WEST, 45)

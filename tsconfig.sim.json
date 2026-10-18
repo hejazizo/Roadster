@@ -7,7 +7,7 @@
     "types": ["node", "vite/client"],
     "skipLibCheck": true,
 
-    /* Bundler mode: the sim imports src/ modules, whose imports leave out extensions */
+    /* Bundler mode: these scripts import src/ modules, whose imports leave out extensions */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -21,5 +21,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["scripts/sim-car.ts"]
+  "include": ["scripts/sim-car.ts", "scripts/build-fleet-models.ts"]
 }

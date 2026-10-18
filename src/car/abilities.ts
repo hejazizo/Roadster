@@ -174,7 +174,7 @@ export function stepAbilities(
   }
 
   // After the glide, which sets the velocity: the jets push along the car's up (off the
-  // ground too, which is the lift-off), weaker the higher the ground below.
+  // ground too, which is the lift-off) and forward, weaker the higher the ground below.
   state.lifting = jetsOn && c.lift && state.fuel > 0
   state.sinceLift = state.lifting ? 0 : state.sinceLift + dt
   if (state.lifting) {
@@ -184,12 +184,12 @@ export function stepAbilities(
       0,
       1,
     )
-    const lift = jets.liftG * MathUtils.lerp(1, jets.minFactor, k)
+    const ground = MathUtils.lerp(1, jets.minFactor, k)
     const rising = Math.max(0, body.linvel().y)
     impulse
       .copy(up)
-      .multiplyScalar(lift)
-      .addScaledVector(forward, jets.forwardG)
+      .multiplyScalar(jets.liftG * ground)
+      .addScaledVector(forward, jets.forwardG * ground)
       .multiplyScalar(g)
       .addScaledVector(WORLD_UP, -jets.riseDrag * rising)
       .multiplyScalar(mass * dt)

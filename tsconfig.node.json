@@ -20,6 +20,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["vite.config.ts", "scripts"],
-  // Imports src/ modules, which need bundler resolution (tsconfig.sim.json).
-  "exclude": ["scripts/sim-car.ts"]
+  // These import src/ modules, which need bundler resolution (tsconfig.sim.json).
+  "exclude": ["scripts/sim-car.ts", "scripts/build-fleet-models.ts"]
 }

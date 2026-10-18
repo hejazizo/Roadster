@@ -140,6 +140,7 @@ export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities
     hops: abilities.current.hops,
     landings: telemetry.current.landings,
     respawns: telemetry.current.respawns,
+    hits: telemetry.current.hits,
   })
 
   useEffect(() => {
@@ -162,11 +163,13 @@ export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities
     if (hops !== s.hops) sfx.hop()
     if (t.landings !== s.landings) sfx.landing(t.landingImpact)
     if (t.respawns !== s.respawns) sfx.respawn()
+    if (t.hits !== s.hits) sfx.hit(t.hitImpact)
     s.boosting = boosting
     s.lifting = lifting
     s.hops = hops
     s.landings = t.landings
     s.respawns = t.respawns
+    s.hits = t.hits
 
     const v = voices.current
     const a = getAudio()

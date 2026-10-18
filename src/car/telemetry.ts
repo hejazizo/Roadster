@@ -6,7 +6,8 @@ import type { PhysicsWorld } from './respawn'
 import type { CarControls } from './useCarControls'
 
 type Collider = Parameters<PhysicsWorld['contactPairsWith']>[0]
-// The car's chassis collider, to find it resting on its roof or side with no wheel down.
+// The car's chassis collider, to find it resting on its roof or side with no wheel down, or
+// touching a parked car.
 export type ChassisContacts = { world: PhysicsWorld; collider: Collider }
 
 // How the last landing went: on the wheels, on the wheels softly under lift, or on the roof
@@ -41,6 +42,9 @@ export type CarTelemetry = {
   verticalSpeed: number // m/s, positive up
   braking: boolean
   respawns: number // bumped on every R or fall, not on a race restart
+  hits: number // bumped when the car (chassis or a wheel) clips a parked car
+  hitImpact: number // 0–1 strength of the last hit, from the car's speed
+  sinceFleet: number // s since the car last touched a parked car
   wheels: WheelTelemetry[]
 }
 
@@ -61,6 +65,9 @@ export const createTelemetry = (): CarTelemetry => ({
   verticalSpeed: 0,
   braking: false,
   respawns: 0,
+  hits: 0,
+  hitImpact: 0,
+  sinceFleet: Infinity,
   wheels: TUNING.car.wheels.positions.map(() => ({
     contact: false,
     skid: 0,
@@ -121,6 +128,27 @@ function chassisOnFloor({ world, collider }: ChassisContacts) {
     })
   })
   if (found) chassisNormal.normalize()
+  return found
+}
+
+// Parked cars sit on a fixed body tagged `userData.fleet` (src/scene/Fleet.tsx, and the sim).
+const isFleet = (collider: Collider | null) =>
+  (collider?.parent()?.userData as { fleet?: boolean } | undefined)?.fleet === true
+
+// Whether the chassis touches a parked car, or a wheel stands on one.
+function touchingFleet({ world, collider }: ChassisContacts, vc: VehicleController) {
+  for (let i = 0; i < vc.numWheels(); i++) {
+    if (vc.wheelIsInContact(i) && isFleet(vc.wheelGroundObject(i))) return true
+  }
+  let found = false
+  world.contactPairsWith(collider, (other) => {
+    if (found || !isFleet(other)) return
+    world.contactPair(collider, other, (manifold) => {
+      for (let i = 0; i < manifold.numContacts(); i++) {
+        found ||= manifold.contactDist(i) < CONTACT_DIST
+      }
+    })
+  })
   return found
 }
 
@@ -208,6 +236,17 @@ export function stepTelemetry(
   }
   t.grounded = grounded
   t.touching = touching
+
+  // A hit is a touch after a moment clear of the fleet, so a scrape or a bounce counts once.
+  if (touchingFleet(contacts, vc)) {
+    if (t.sinceFleet > TUNING.vfx.hit.minGap) {
+      t.hits++
+      t.hitImpact = Math.min(Math.hypot(v.x, v.y, v.z) / TUNING.vfx.hit.fullImpactSpeed, 1)
+    }
+    t.sinceFleet = 0
+  } else {
+    t.sinceFleet += dt
+  }
 
   // Brake lights: braking against the motion, or the handbrake while rolling.
   const speed = vc.currentVehicleSpeed()

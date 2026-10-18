@@ -15,7 +15,8 @@ Docker (only Docker needed on the host):
 - `make lint` / `make build` / `make format` — run the npm scripts in a container
 - `make shell` — bash inside the container; `make clean` — remove image and volumes
 - `make car-model` — rebuild `public/models/car.glb` from the source model (see `docs/car-model-spec.md`)
-- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, and the half-loop (with and without fans, and the drop off its lip) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
+- `make fleet-models` — rebuild `public/models/fleet/*.glb`, the Proving Ground's parked cars, built in code from `src/scene/fleetData.ts`
+- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip) and the fleet jump (kickflip, hits) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
 
 The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
 
@@ -28,11 +29,12 @@ Local Node (alternative):
 - `npm run lint` — ESLint
 - `npm run format` / `npm run format:check` — Prettier
 - `npm run model:car` — rebuild the car GLB
+- `npm run model:fleet` — rebuild the fleet GLBs
 - `npm run sim:car` — handling sim (add assist modes and/or level ids to run only those, e.g. `npm run sim:car beginner proving`)
 
 ## Folders (`src/`)
 
-- `scene/` — world: ground, lights, level geometry; levels are data (`levelData.ts` types, `testLevel.ts`, `provingGround.ts`, listed in `levels.ts`)
+- `scene/` — world: ground, lights, level geometry; levels are data (`levelData.ts` types, `fleetData.ts` parked-car shapes, `testLevel.ts`, `provingGround.ts`, listed in `levels.ts`)
 - `car/` — car physics and controls
 - `camera/` — chase / debug cameras
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect

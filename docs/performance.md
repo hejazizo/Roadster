@@ -46,6 +46,8 @@ The main thread only sets about 15 audio parameters per frame and wakes a 25 ms 
 
 **M16.3** (same setup): 73 calls per frame at the Proving Ground spawn. The eight cold-gas plumes (two cones and a glow each) are hidden while idle; holding lift on the floor draws 85 (the four underbody plumes plus the vapour pool), and a roll adds the two firing side plumes. The vapour is one more 700-point pool in a single draw call. 60 fps both ways. The `jet_*` empties don't change the car's size (1.76 MB).
 
+**M16.4** (same setup): still 73 calls and ~294k triangles at the Proving Ground spawn, 67 beside the fleet. The five parked cars replace the five boxes one for one: each is a single mesh with one vertex-coloured material (552–1,308 triangles, 4k in all), so one call each, two with the shadow pass. 60 fps at spawn, at the fleet and through the kickflip.
+
 ## Bundle
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
@@ -58,6 +60,7 @@ The main thread only sets about 15 audio parameters per frame and wakes a 25 ms 
 | `index`       | 81 kB   | 30 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files)                                                  |
 | `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                           |
 | `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures  |
+| `fleet/*.glb` | 62 kB   | 30 kB   | `public/models/fleet/` (M16.4 parked cars, 9–21 kB each), Meshopt geometry, preloaded at startup             |
 | sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)               |
 
 The first load is about 3.6 MB gzipped (M13 added ~30 kB): Rapier 842 kB, the car 1.42 MB, the sky 954 kB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.

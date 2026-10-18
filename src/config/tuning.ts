@@ -151,21 +151,21 @@ export const TUNING = {
       autoRelease: 0.35, // …until the surface is flatter than this
     },
     // Cold-gas jets: held lift pushes along the car's own up (so firing upside down pushes it
-    // down) and a little forward. The push fades with height above the ground below, so the
-    // jets lift the car off, carry it a few metres up and brake a fall near the ground, but
-    // can't hold it high or replace the glide over a void. Air roll (held, plus steer) spins
-    // the car about its long axis.
+    // down) and forward. Both pushes fade with height above the ground below (or a parked car's
+    // roof), so the jets lift the car off, carry it a few metres up and along, and brake a fall
+    // near the ground, but can't hold it high or replace the glide over a void. Air roll (held,
+    // plus steer) spins the car about its long axis.
     jets: {
       liftG: 2.7, // g along the car's up, near the ground
-      forwardG: 0.3, // g along the car's forward while lifting
-      fuelPerSecond: 0.4,
-      fullHeight: 3, // m above the ground (chassis centre) with full lift…
+      forwardG: 1.2, // g along the car's forward near the ground: a standstill lift-off clears the fleet
+      fuelPerSecond: 0.35,
+      fullHeight: 3, // m above the ground (chassis centre) with full push…
       fadeHeight: 12, // …fading to minFactor by this height (and over a void)
       minFactor: 0,
       riseDrag: 1.5, // 1/s, slows a climb under lift (m/s² per m/s up), so it settles at a hover
       heightProbe: 50, // m, how far down the ground is looked for
-      rollTorque: 14, // rad/s² of roll spin from full steer while rolling
-      maxRollRate: 5, // rad/s
+      rollTorque: 30, // rad/s² of roll spin from full steer while rolling
+      maxRollRate: 9, // rad/s (a full roll in about 0.9 s)
       // Air levelling holds the car near upright and lets go as it turns over (angle between
       // the car's up and the level's, rad), so it can fly inverted.
       levelCapture: 1.4,
@@ -250,6 +250,7 @@ export const TUNING = {
       shakeDecay: 2.5, // trauma lost per second
       shakeOffset: 0.3, // m of camera and aim offset at full trauma
       badLandingShake: 0.5, // extra trauma on a roof, side or too-hard landing
+      hitShake: 0.5, // trauma added by a full-strength hit on a parked car
       // On a steep surface (a wall, the half-loop) the camera turns its up to the car's; on
       // the floor, gentle ramps and in the air it uses world up.
       surfaceAngleStart: 0.35, // rad of car tilt where the camera starts following its up…
@@ -264,6 +265,11 @@ export const TUNING = {
       minAirTime: 0.25, // s airborne before touching down counts as a landing
       minImpactSpeed: 2, // m/s fall speed of the weakest landing that kicks up dust
       fullImpactSpeed: 10, // m/s fall speed of a full-strength landing
+    },
+    // Clipping a parked car (the Proving Ground's fleet).
+    hit: {
+      fullImpactSpeed: 15, // m/s car speed of a full-strength hit
+      minGap: 0.3, // s clear of the fleet before another touch counts as a new hit
     },
     skid: {
       minSlipSpeed: 2.5, // m/s sideways slide at a wheel where marks start

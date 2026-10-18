@@ -76,6 +76,20 @@ export const sfx = {
       })
     }),
 
+  // Clipping a parked car: a dull body thud with a metallic clank on top, louder with impact.
+  hit: (impact: number) =>
+    play((a, out, at) => {
+      const k = (0.4 + 0.6 * impact) * mix.oneShots
+      tone(a, out, { at, freq: 90, freqEnd: 45, decay: 0.2, gain: 0.7 * k })
+      tone(a, out, { at, freq: 620, freqEnd: 480, decay: 0.12, gain: 0.18 * k, type: 'square' })
+      noise(a, out, {
+        at,
+        decay: 0.16 + 0.1 * impact,
+        gain: 0.55 * k,
+        filter: { type: 'bandpass', freq: 1800, freqEnd: 700 },
+      })
+    }),
+
   // Back at the safe point: a soft falling swish.
   respawn: () =>
     play((a, out, at) => {
