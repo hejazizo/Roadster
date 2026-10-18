@@ -16,7 +16,8 @@ export const CAR_MODEL_CREDIT = {
   licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
 }
 
-// Sky HDRI for reflections and ambient light: "Kloofendal 48d Partly Cloudy (Pure Sky)" by
-// Greg Zaal and Jarod Guest, Poly Haven, CC0. Its sun is within 5° of the sun light in
+// Sky HDRI for reflections and ambient light on day levels (those without art; night levels draw
+// their own sky, src/scene/art/NightSky.tsx), so it's only fetched when one is shown:
+// "Kloofendal 48d Partly Cloudy (Pure Sky)" by Greg Zaal and Jarod Guest, Poly Haven, CC0. Its sun is within 5° of the sun light in
 // src/scene/Lights.tsx; keep them together if either changes.
 export const ENVIRONMENT_URL = `${import.meta.env.BASE_URL}hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr`

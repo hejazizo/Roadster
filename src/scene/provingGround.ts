@@ -3,6 +3,7 @@
 // half-loop in the west and the parked fleet in the east.
 // World axes: −Z is "north" (the spawn heading), +X is east. Ground level is y = 0.
 import { FLEET_SHAPES, type FleetModel, parkCar, type ParkedCar } from './fleetData'
+import { PROVING_GROUND_ART } from './provingGroundArt'
 import { box, EAST, ground, type Level, NORTH, roundedRect, SOUTH, WEST } from './levelData'
 
 // Inside of the perimeter walls.
@@ -84,4 +85,6 @@ export const PROVING_GROUND: Level = {
     spawn: { position: [-50, 1.5, 25], yaw: NORTH },
     finish: { center: [FLEET_X, 1, -270], yaw: NORTH, radius: 5 },
   },
+
+  art: PROVING_GROUND_ART,
 }

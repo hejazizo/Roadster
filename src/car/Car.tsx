@@ -22,6 +22,7 @@ import {
   type VehicleController,
 } from './abilities'
 import CarModel from './CarModel'
+import Headlights from './Headlights'
 import { createDrivingState, resetDriving, stepDriving } from './handling'
 import { createSafePoint, placeAtSafePoint, stepSafePoint, type Ray, type Spawn } from './respawn'
 import { resetTelemetry, stepTelemetry, type CarTelemetry } from './telemetry'
@@ -57,9 +58,10 @@ type CarProps = {
   // The level's start pose; the car returns here on a restart or level change.
   spawn: Spawn
   jets: boolean // the level allows lift and air roll
+  headlights: boolean // a night level: the head lights shine
 }
 
-export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps) {
+export default function Car({ ref, visualRef, telemetry, spawn, jets, headlights }: CarProps) {
   const { world, rapier } = useRapier()
   const readControls = useCarControls()
   const vehicle = useRef<VehicleController | null>(null)
@@ -236,6 +238,7 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps
         <CuboidCollider args={chassis.halfExtents} mass={chassis.mass} />
         {/* Outside the Suspense, so the camera has a target while the model loads. */}
         <group ref={visualRef}>
+          {headlights && <Headlights />}
           <Suspense fallback={null}>
             <CarModel
               steerGroups={steerGroups}
@@ -251,6 +254,7 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets }: CarProps
       </RigidBody>
       {/* World-space effects, outside the moving body. */}
       <CarEffects
+        night={headlights}
         body={ref}
         telemetry={telemetry}
         thrust={thrust}

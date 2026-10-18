@@ -35,6 +35,7 @@ Local Node (alternative):
 ## Folders (`src/`)
 
 - `scene/` — world: ground, lights, level geometry; levels are data (`levelData.ts` types, `fleetData.ts` parked-car shapes, `testLevel.ts`, `provingGround.ts`, listed in `levels.ts`)
+  - `scene/art/` — level art drawn over the greybox colliders (night sky, ground and markings, floodlights, fence, scenery), from data in `artData.ts` (types) and `provingGroundArt.ts`; a level without `art` stays greybox under the day sky
 - `car/` — car physics and controls
 - `camera/` — chase / debug cameras
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect

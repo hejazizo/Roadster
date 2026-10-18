@@ -8,8 +8,17 @@ import {
   type TrimeshArgs,
 } from '@react-three/rapier'
 import { useMemo } from 'react'
-import { BufferAttribute, BufferGeometry, DoubleSide, Float32BufferAttribute, Vector3 } from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DoubleSide,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three'
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
+import { loopStripGeometry, loopSurfaceGeometry } from './art/loopArt'
 import Fleet from './Fleet'
 import {
   loopMesh,
@@ -19,6 +28,7 @@ import {
   type Loop,
   type Ramp,
 } from './levelData'
+import { roadGeometry } from './road'
 
 const SURFACE_COLORS: Record<
   LevelData['surface'],
@@ -31,19 +41,25 @@ const PLATFORM_COLOR = '#9a9a9a'
 const WALL_COLOR = '#c8b48a'
 const RAMP_COLOR = '#e8892c'
 const ROAD_COLOR = '#3a3a3a'
+// The half-loop with level art: smooth metallic grey with red light strips (HDR, so they bloom).
+const LOOP_METAL = '#8e959d'
+const LOOP_STRIP = new Color(6, 0.22, 0.12)
 // Small lifts above the ground so overlays don't z-fight with it.
 const GRID_LIFT = 0.01
 const ROAD_LIFT = 0.03
 
-function BoxPiece({ center, size, color }: Box & { color: string }) {
+// A box collider, drawn unless the level art draws it (`color` null).
+function BoxPiece({ center, size, color }: Box & { color: string | null }) {
   const [sx, sy, sz] = size
   return (
     <>
       <CuboidCollider args={[sx / 2, sy / 2, sz / 2]} position={center} />
-      <mesh position={center} castShadow receiveShadow>
-        <boxGeometry args={size} />
-        <meshStandardMaterial color={color} />
-      </mesh>
+      {color && (
+        <mesh position={center} castShadow receiveShadow>
+          <boxGeometry args={size} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      )}
     </>
   )
 }
@@ -67,16 +83,30 @@ function RampPiece({ ramp }: { ramp: Ramp }) {
   )
 }
 
-// The half-loop: a trimesh collider and a mesh from the same triangles.
-function LoopPiece({ loop }: { loop: Loop }) {
+// The half-loop: a trimesh collider and a mesh from the same triangles; with level art, shaded
+// smooth in metal, with red light strips along its edges.
+function LoopPiece({ loop, art }: { loop: Loop; art: boolean }) {
   const { rapier } = useRapier()
-  const { vertices, indices, geometry } = useMemo(() => {
+  const { vertices, indices, geometry, material, strips } = useMemo(() => {
     const mesh = loopMesh(loop)
+    if (art) {
+      return {
+        ...mesh,
+        geometry: loopSurfaceGeometry(loop),
+        material: new MeshStandardMaterial({ color: LOOP_METAL, metalness: 0.7, roughness: 0.32 }),
+        strips: loopStripGeometry(loop),
+      }
+    }
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(mesh.vertices, 3))
     g.setIndex(new BufferAttribute(mesh.indices, 1))
-    return { ...mesh, geometry: g }
-  }, [loop])
+    const greybox = new MeshStandardMaterial({ color: RAMP_COLOR, flatShading: true })
+    return { ...mesh, geometry: g, material: greybox, strips: null }
+  }, [loop, art])
+  const stripMaterial = useMemo(
+    () => new MeshBasicMaterial({ color: LOOP_STRIP, side: DoubleSide }),
+    [],
+  )
   const rotation: [number, number, number] = [0, loop.yaw, 0]
   return (
     <>
@@ -88,37 +118,29 @@ function LoopPiece({ loop }: { loop: Loop }) {
         position={loop.start}
         rotation={rotation}
       />
-      <mesh geometry={geometry} position={loop.start} rotation={rotation} castShadow receiveShadow>
-        <meshStandardMaterial color={RAMP_COLOR} flatShading />
-      </mesh>
+      <mesh
+        geometry={geometry}
+        material={material}
+        position={loop.start}
+        rotation={rotation}
+        castShadow
+        receiveShadow
+      />
+      {strips && (
+        <mesh
+          geometry={strips}
+          material={stripMaterial}
+          position={loop.start}
+          rotation={rotation}
+        />
+      )}
     </>
   )
 }
 
 // Flat ribbon along a closed loop of points, just above the ground.
 function Road({ points, width }: LevelData['road']) {
-  const geometry = useMemo(() => {
-    const positions: number[] = []
-    const indices: number[] = []
-    const n = points.length
-    points.forEach(([x, z], i) => {
-      const [px, pz] = points[(i - 1 + n) % n]
-      const [nx, nz] = points[(i + 1) % n]
-      const len = Math.hypot(nx - px, nz - pz)
-      // Side offset: the tangent turned 90° on the ground plane.
-      const ox = ((nz - pz) / len) * (width / 2)
-      const oz = (-(nx - px) / len) * (width / 2)
-      positions.push(x + ox, ROAD_LIFT, z + oz, x - ox, ROAD_LIFT, z - oz)
-      const a = 2 * i
-      const b = 2 * ((i + 1) % n)
-      indices.push(a, a + 1, b, b, a + 1, b + 1)
-    })
-    const g = new BufferGeometry()
-    g.setAttribute('position', new Float32BufferAttribute(positions, 3))
-    g.setIndex(indices)
-    g.computeVertexNormals()
-    return g
-  }, [points, width])
+  const geometry = useMemo(() => roadGeometry(points, width, ROAD_LIFT), [points, width])
 
   return (
     <mesh geometry={geometry} receiveShadow>
@@ -127,42 +149,46 @@ function Road({ points, width }: LevelData['road']) {
   )
 }
 
+// The level's colliders and its greybox look. With level art (src/scene/art), the ground, walls
+// and road are drawn by the art instead and the half-loop gets its art materials.
 export default function Level({ level }: { level: LevelData }) {
   const colors = SURFACE_COLORS[level.surface]
+  const art = level.art !== undefined
   return (
     <>
       <RigidBody type="fixed" colliders={false}>
         {level.ground.map((piece, i) => (
-          <BoxPiece key={`ground-${i}`} {...piece} color={colors.ground} />
+          <BoxPiece key={`ground-${i}`} {...piece} color={art ? null : colors.ground} />
         ))}
         {level.platforms.map((piece, i) => (
           <BoxPiece key={`platform-${i}`} {...piece} color={PLATFORM_COLOR} />
         ))}
         {level.walls.map((piece, i) => (
-          <BoxPiece key={`wall-${i}`} {...piece} color={WALL_COLOR} />
+          <BoxPiece key={`wall-${i}`} {...piece} color={art ? null : WALL_COLOR} />
         ))}
         {level.ramps.map((ramp, i) => (
           <RampPiece key={`ramp-${i}`} ramp={ramp} />
         ))}
         {level.loops.map((loop, i) => (
-          <LoopPiece key={`loop-${i}`} loop={loop} />
+          <LoopPiece key={`loop-${i}`} loop={loop} art={art} />
         ))}
       </RigidBody>
       <Fleet cars={level.fleet} />
       {/* Grid lines make motion visible on the flat ground. */}
-      {level.ground.map(({ center: [x, y, z], size: [sx, sy, sz] }, i) => (
-        <Grid
-          key={i}
-          args={[sx, sz]}
-          position={[x, y + sy / 2 + GRID_LIFT, z]}
-          cellSize={2}
-          cellColor={colors.grid}
-          sectionSize={10}
-          sectionColor={colors.section}
-          fadeDistance={150}
-        />
-      ))}
-      <Road {...level.road} />
+      {!art &&
+        level.ground.map(({ center: [x, y, z], size: [sx, sy, sz] }, i) => (
+          <Grid
+            key={i}
+            args={[sx, sz]}
+            position={[x, y + sy / 2 + GRID_LIFT, z]}
+            cellSize={2}
+            cellColor={colors.grid}
+            sectionSize={10}
+            sectionColor={colors.section}
+            fadeDistance={150}
+          />
+        ))}
+      {!art && <Road {...level.road} />}
     </>
   )
 }

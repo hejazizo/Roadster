@@ -8,6 +8,7 @@ import { TUNING } from '../config/tuning'
 import { useLevel } from '../state/levelStore'
 import { useRunMode } from '../state/modeStore'
 import { useRaceStore } from '../state/raceStore'
+import NightArt from './art/NightArt'
 import Effects from './Effects'
 import Level from './Level'
 import Lights from './Lights'
@@ -27,8 +28,12 @@ export default function World() {
 
   return (
     <>
-      <color attach="background" args={[SKY_COLOR]} />
-      <Lights target={carVisualRef} />
+      {level.art ? (
+        <NightArt key={`art-${level.id}`} level={level} art={level.art} />
+      ) : (
+        <color attach="background" args={[SKY_COLOR]} />
+      )}
+      <Lights target={carVisualRef} art={level.art} />
       <Suspense fallback={null}>
         {/* Step physics before other frame callbacks so the camera reads this frame's car pose.
             Pausing skips whole steps, which freezes the car, the race clock and the rings. */}
@@ -41,6 +46,7 @@ export default function World() {
             telemetry={telemetry}
             spawn={spawn}
             jets={level.jets !== false}
+            headlights={level.art !== undefined}
           />
           <Race
             key={`race-${level.id}-${mode}`}

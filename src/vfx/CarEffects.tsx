@@ -18,12 +18,16 @@ const HEAT_COLOR = new Color(0.35, 0.12, 0.03) // faint additive glow
 // Dust kicked up by a landing, per wheel on the ground, at full impact.
 const DUST_PER_WHEEL = 18
 const DUST_COLOR = new Color('#b9ab8f')
+// At night the particles, which aren't lit, take the floodlit asphalt's grey instead.
+const NIGHT_DUST_COLOR = new Color('#6d7178')
 // Tyre smoke from sliding wheels, per wheel at full skid.
 const SMOKE_RATE = 18
 const SMOKE_COLOR = new Color('#d8d8d8')
+const NIGHT_SMOKE_COLOR = new Color('#9a9fa6')
 const SMOKE_MIN_SKID = 0.4
 // Cold-gas vapour from the jets, and the cloud a clean landing under lift kicks up.
 const VAPOUR_COLOR = new Color('#eef3f8')
+const NIGHT_VAPOUR_COLOR = new Color('#c9d2dc')
 const VAPOUR_SPEED = 9 // m/s out of the nozzle at full thrust
 
 const pos = new Vector3()
@@ -39,6 +43,7 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min)
 const jitter = (out: Vector3) => out.randomDirection().multiplyScalar(Math.random())
 
 type CarEffectsProps = {
+  night: boolean // a night level: dust and smoke darker, as seen under the floodlights
   body: RefObject<RapierRigidBody | null>
   telemetry: RefObject<CarTelemetry>
   thrust: RefObject<number>
@@ -50,6 +55,7 @@ type CarEffectsProps = {
 // World-space effects around the car: exhaust embers, jet vapour, landing dust and vapour,
 // tyre smoke and marks.
 export default function CarEffects({
+  night,
   body,
   telemetry,
   thrust,
@@ -57,6 +63,9 @@ export default function CarEffects({
   jetLevels,
   jetNozzles,
 }: CarEffectsProps) {
+  const dustColor = night ? NIGHT_DUST_COLOR : DUST_COLOR
+  const smokeColor = night ? NIGHT_SMOKE_COLOR : SMOKE_COLOR
+  const vapourColor = night ? NIGHT_VAPOUR_COLOR : VAPOUR_COLOR
   const embers = useRef<ParticlesHandle>(null)
   const dust = useRef<ParticlesHandle>(null)
   const vapour = useRef<ParticlesHandle>(null)
@@ -123,7 +132,7 @@ export default function CarEffects({
             .addScaledVector(carVel, 0.6)
             .add(jitter(spread).multiplyScalar(1.2))
           spread.copy(pos).addScaledVector(dir, rand(0.1, 0.5))
-          vapour.current.emit(spread, vel, rand(0.5, 0.9), rand(0.25, 0.45), VAPOUR_COLOR)
+          vapour.current.emit(spread, vel, rand(0.5, 0.9), rand(0.25, 0.45), vapourColor)
         }
       }
       // A clean landing under lift: a white cloud rolling out from under the car.
@@ -135,7 +144,7 @@ export default function CarEffects({
           vel.set(Math.cos(angle) * speed, rand(0.3, 1.5), Math.sin(angle) * speed)
           spread.set(p.x, p.y, p.z).add(jitter(tangent).multiplyScalar(1.2))
           spread.y -= 0.4
-          vapour.current.emit(spread, vel, rand(1, 1.8), rand(0.8, 1.4), VAPOUR_COLOR)
+          vapour.current.emit(spread, vel, rand(1, 1.8), rand(0.8, 1.4), vapourColor)
         }
       }
     }
@@ -163,7 +172,7 @@ export default function CarEffects({
             .addScaledVector(carVel, 0.3)
           spread.copy(w.point).addScaledVector(w.normal, 0.15)
           const size = rand(0.5, 1) * (0.6 + 0.6 * impact)
-          dust.current.emit(spread, vel, rand(0.8, 1.6), size, DUST_COLOR)
+          dust.current.emit(spread, vel, rand(0.8, 1.6), size, dustColor)
         }
       }
 
@@ -176,7 +185,7 @@ export default function CarEffects({
             .add(jitter(spread).multiplyScalar(0.6))
             .addScaledVector(w.normal, 0.6)
           spread.copy(w.point).addScaledVector(w.normal, 0.2)
-          dust.current.emit(spread, vel, rand(0.7, 1.2), rand(0.4, 0.7), SMOKE_COLOR)
+          dust.current.emit(spread, vel, rand(0.7, 1.2), rand(0.4, 0.7), smokeColor)
         }
       }
     }

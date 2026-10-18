@@ -3,6 +3,7 @@
 // headless sim (scripts/sim-car.ts) builds the same colliders from them.
 // World axes: −Z is "north", +X is east. Ground level is y = 0.
 import { ShapeUtils, Vector2, Vector3 } from 'three'
+import type { LevelArt } from './artData'
 import type { ParkedCar } from './fleetData'
 
 export type Vec3 = [number, number, number]
@@ -50,6 +51,7 @@ export type Level = {
   rings: Ring[] // time-trial checkpoints in order; the last one is the start/finish arch
   jets?: boolean // the car's cold-gas jets (lift and air roll) work here; on unless false
   stunts?: Stunts // the level offers the reveal run
+  art?: LevelArt // the night look (src/scene/artData.ts), visual only; greybox and day without it
 }
 
 export const NORTH = Math.PI
