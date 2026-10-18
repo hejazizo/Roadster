@@ -7,14 +7,54 @@ body,
   overflow: hidden;
 }
 
-/* Shown in #root until React mounts, while the game's scripts download. */
+body {
+  background: #0b1118;
+}
+
+/* Shown in #root until React mounts, while the game's scripts download. Plain values, as
+   ui/theme.css isn't loaded yet. */
 .boot {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   height: 100%;
-  background: #87ceeb;
-  font-family: system-ui, sans-serif;
-  font-size: 20px;
-  color: #ffffff;
+  background: #0b1118;
+  font-family: 'Satoshi', system-ui, sans-serif;
+  color: #edf1f4;
+}
+
+.boot-mark {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.boot-bar {
+  position: relative;
+  width: 160px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(197, 212, 223, 0.14);
+  overflow: hidden;
+}
+
+.boot-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 1px;
+  background: #f18d80;
+  animation: boot-bar 1.2s ease-in-out infinite;
+}
+
+@keyframes boot-bar {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }

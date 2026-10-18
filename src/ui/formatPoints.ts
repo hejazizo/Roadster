@@ -1,3 +1,5 @@
-// +500 / −500, with a real minus sign.
-export const formatPoints = (points: number) =>
-  points > 0 ? `+${points}` : points < 0 ? `−${-points}` : '0'
+// +1,500 / −500, with a real minus sign.
+export const formatPoints = (points: number) => {
+  const abs = Math.abs(points).toLocaleString('en-US')
+  return points > 0 ? `+${abs}` : points < 0 ? `−${abs}` : '0'
+}

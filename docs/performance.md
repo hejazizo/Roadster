@@ -52,18 +52,20 @@ The main thread only sets about 15 audio parameters per frame and wakes a 25 ms 
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
 
-| Chunk         | Raw     | Gzip    | Notes                                                                                                        |
-| ------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------ |
-| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                       |
-| `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip) |
-| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                  |
-| `index`       | 81 kB   | 30 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files)                                                  |
-| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                           |
-| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures  |
-| `fleet/*.glb` | 62 kB   | 30 kB   | `public/models/fleet/` (M16.4 parked cars, 9–21 kB each), Meshopt geometry, preloaded at startup             |
-| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)               |
+| Chunk         | Raw     | Gzip    | Notes                                                                                                         |
+| ------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                        |
+| `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip)  |
+| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                   |
+| `index`       | 103 kB  | 37 kB   | the game (M14 audio +12 kB raw, +4 kB gzip; no audio files; M16.7 UI with lucide icons +3 kB gzip)            |
+| `index.css`   | 19 kB   | 4.3 kB  | overlay styles (M16.7 redesign +2.4 kB gzip)                                                                  |
+| fonts         | 111 kB  | 111 kB  | M16.7: IBM Plex Mono 400/500 latin woff2, bundled (2 × 15 kB); Satoshi 400/500/700 from Fontshare (3 × 27 kB) |
+| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                            |
+| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures   |
+| `fleet/*.glb` | 62 kB   | 30 kB   | `public/models/fleet/` (M16.4 parked cars, 9–21 kB each), Meshopt geometry, preloaded at startup              |
+| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), fetched at startup but doesn't block it (own Suspense)                |
 
-The first load is about 3.6 MB gzipped (M13 added ~30 kB): Rapier 842 kB, the car 1.42 MB, the sky 954 kB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.
+The first load is about 3.6 MB gzipped (M13 added ~30 kB, M16.7's UI redesign ~120 kB, almost all fonts): Rapier 842 kB, the car 1.42 MB, the sky 954 kB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.
 
 ## How to measure again
 

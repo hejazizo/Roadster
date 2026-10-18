@@ -71,9 +71,30 @@ const schema = Object.fromEntries(
 // Log the current values so tuned numbers can be copied back into tuning.ts.
 const logValues = () => console.log(JSON.stringify(TUNING, null, 2))
 
+// leva's look, matched to the overlay's tokens (ui/theme.css).
+const THEME = {
+  colors: {
+    elevation1: '#0b1118',
+    elevation2: '#121c25',
+    elevation3: '#26333e',
+    accent1: '#c0cbd3',
+    accent2: '#f18d80',
+    accent3: '#f5a296',
+    highlight1: '#8d9eac',
+    highlight2: '#c0cbd3',
+    highlight3: '#edf1f4',
+    vivid1: '#edc18f',
+  },
+  radii: { xs: '3px', sm: '4px', lg: '8px' },
+  fonts: {
+    mono: "'IBM Plex Mono', ui-monospace, monospace",
+    sans: "'Satoshi', system-ui, sans-serif",
+  },
+}
+
 // Live tuning panel. App lazy-loads it on the first tuning action (Backquote `) and
 // toggles `open`; it stays mounted once loaded so edits and folder state survive.
 export default function TuningPanel({ open }: { open: boolean }) {
   useControls({ ...schema, 'Log values': button(logValues) })
-  return <Leva hidden={!open} />
+  return <Leva hidden={!open} theme={THEME} />
 }

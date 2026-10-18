@@ -39,6 +39,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.4 | Reveal: fleet jump             | 3 · Details | ☑      |
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☑      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☐      |
+| 16.7 | Interface redesign             | 3 · Details | ☑      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
 | 19   | Release polish                 | 3 · Details | ☐      |
@@ -177,7 +178,7 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 ## Phase 3 — Details & polish
 
-Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order).
+Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order). M16.7 is independent of the reveal and was done before M16.6.
 
 ### M11 — Hero Roadster model
 
@@ -623,6 +624,31 @@ The old "real level art" milestone, now for the Proving Ground. Keep the collisi
 
 **Done when:** the Proving Ground looks finished in screenshots of both stunts at night, plays the same as at the end of M16.5 (sim unchanged), and holds 60 fps on the M2 Max.
 
+### M16.7 — Interface redesign
+
+Independent of the reveal; done before M16.6. The HTML overlay still looked like greybox (system font, uppercase labels, a bright yellow accent, a tall centred menu card over the car). Redesign it to a polished, professional look modelled on [roadster.pplx.app](https://roadster.pplx.app/): dark slate panels with hairline borders, a clean sans for text and a mono face for every number, sentence case, one accent colour. Presentation only: stores, bindings, focus rules and gameplay stay as they are.
+
+- Design tokens and base classes in one stylesheet; a sans + mono pairing; a small icon set.
+- Shared pieces for the repeated menu and HUD patterns (segmented pickers, key caps, meters, stats).
+- Main menu as a left sidebar so the car stays visible, with the controls in their own card; pause and results as centred dialogs.
+- HUD: a telemetry card (status, speed, fuel, fans, air readout), the timer with rings or points, and for the reveal run a step track with the hint's keys drawn as caps.
+- Boot screen and the tuning panel matched to the new look.
+
+**Done when:** every menu, HUD state and result screen uses the new look, everything works by keyboard, pad and mouse as before, and `dev`, `build` and `lint` pass.
+
+✅ **Done:**
+
+- **Tokens** in `src/ui/theme.css`: background `#0b1118`, surfaces at 94% with a 16% hairline border, text in three steps, a coral accent (`#f18d80`, the primary button and current states) and semantic colours (fuel blue, draining amber, done green, danger coral, fans violet, medal tints). Base classes `.ui-panel`, `.ui-label`, `.ui-mono`, `.ui-key`, `.ui-segments`, `.ui-meter`, `.ui-stat`, `.ui-chip`, `.ui-dot`; transitions drop out under `prefers-reduced-motion`, and the moving animations have fade-only versions.
+- **Fonts:** Satoshi 400/500/700 from Fontshare's CSS API (its ITF Free Font License allows the API and self-hosting, but not the files in a public repository) and IBM Plex Mono 400/500 bundled from `@fontsource/ibm-plex-mono` (OFL). Without the Fontshare request the text falls back to system-ui. Icons from `lucide-react`.
+- **Components** (`src/ui/components.tsx`): `KeyCap` (one cap per bound key, following the last-used device), `Segmented` (the Level / Mode / Assists radiogroups, which were three copies), `Meter`, `Stat`, `MedalChip`, `Section`. They keep the menus' focus rules: no tab stops, no focus on click.
+- **Main menu:** a 340 px sidebar (wordmark and mode; _Run_: level, mode, best; _Car_: paint, assists; _Sound_: mute and sliders with values; a sticky coral Play and the model credit). The controls list is a card bottom-right, hidden below 960 × 560; under 720 px the sidebar fills the width. This closes the note about the menu card covering the car.
+- **Pause and results:** centred dialogs with icon buttons and key caps. Results show the time or score in large mono type, a tinted medal and "New best" chip, and the reveal breakdown with green bonuses, coral penalties and faint zero lines; points use thousands separators.
+- **HUD:** a telemetry card bottom-left: status dots (Grounded, Drifting, Airborne, Gliding, Overturned, Wall/Ceiling hold, Jets), speed, a fuel meter with % (amber while draining, coral when empty), a fans meter, and Height / Vertical / Roll as stats in the air. Top centre: the timer with rings or points, and in the reveal run a six-step track (done green, failed coral, current bright), the step's name, the hint with key caps and the inverted-hold meter in seconds. Popups are pill toasts under the panel; the countdown is large mono digits with a scale-in, and "Go" is in the accent.
+- **Boot screen** on the dark background with the wordmark and a thin loading bar; the leva tuning panel takes the same colours and fonts.
+- **Size:** `index` +3 kB gzip, CSS +2.4 kB gzip, fonts 111 kB (2 × 15 kB bundled, 3 × 27 kB from Fontshare), in `docs/performance.md`.
+
+Checked in the browser pane at 1440 × 900, at the pane's own size and at 375 × 812: the main menu by L, N, T and → (labels, segments and swatches follow, nothing takes focus); a run with the HUD (boost turns the fuel meter amber); the reveal objective at steps 2 and 5 with the hold meter, key caps and popups, the reveal results with a medal and "New best", and the pause dialog (states set through the stores); both fonts loaded; no console errors. `lint`, `build` and `format:check` pass. Gameplay code is unchanged, so the sim wasn't re-run.
+
 ### M17 — More levels & game modes
 
 - 2–4 more levels.
@@ -671,7 +697,8 @@ Park later ideas here instead of building them early.
 - The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M16.6/M19 if it matters).
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
 - The sky HDRI is only used for lighting and reflections; the background is still the flat sky colour. Use it (or a matching skybox) as the background with the real level art — M16.6 uses a night HDRI on the Proving Ground. Its sun is within 5° of `SUN_OFFSET`; keep them together.
-- The main menu card covers most of the car at spawn, so a paint change shows only on its rear. A garage/showroom view (camera orbiting the car beside the menu) would show it off — M17 with the level select, or M19.
+- The main menu is a left sidebar since M16.7, so the car shows beside it; a garage/showroom view (camera orbiting the car beside the menu) would show paints off better — M17 with the level select, or M19.
+- UI (M16.7): the HUD is still mouse-transparent and the menus have no d-pad focus navigation (see the gamepad note); the fonts come from Fontshare at runtime, so an offline build falls back to system-ui; the results dialog doesn't animate its numbers; touch layouts are M18.
 - Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); fine for greybox, revisit with real level art (M16.6).
 - `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).

@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { LogOut, Play, RotateCcw, type LucideIcon } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
 import { sfx } from '../audio/sounds'
 import { CAR_MODEL_CREDIT } from '../config/assets'
-import { bindingLabel, type BindingRef, type ButtonAction } from '../config/bindings'
+import type { BindingRef, ButtonAction } from '../config/bindings'
 import { PAINTS } from '../config/paints'
 import { onPress } from '../input/input'
 import { LEVELS } from '../scene/levels'
@@ -11,7 +12,8 @@ import { useLevel, useLevelStore } from '../state/levelStore'
 import { RUN_MODES, useModeStore, useRunMode } from '../state/modeStore'
 import { usePaintStore } from '../state/paintStore'
 import { isRunning, useRaceStore, type RaceState } from '../state/raceStore'
-import { medalFor, type Medal } from '../state/stuntRun'
+import { medalFor } from '../state/stuntRun'
+import { KeyCap, MedalChip, Section, Segmented } from './components'
 import { formatPoints } from './formatPoints'
 import { formatTime } from './formatTime'
 import './Menus.css'
@@ -126,24 +128,59 @@ const hasStunts = () => {
   return LEVELS.some(({ level }) => level.id === levelId && level.stunts)
 }
 
+const useLevelName = () => {
+  const levelId = useLevelStore((s) => s.levelId)
+  return LEVELS.find(({ level }) => level.id === levelId)?.name
+}
+
 type MenuButtonProps = {
   label: string
   action: ButtonAction // shown as the button's key hint
   onClick: () => void
+  icon?: LucideIcon
   primary?: boolean
 }
 
-function MenuButton({ label, action, onClick, primary }: MenuButtonProps) {
-  const device = useInputStore((s) => s.device)
+function MenuButton({ label, action, onClick, icon: Icon, primary }: MenuButtonProps) {
   return (
     <button
       type="button"
       className={primary ? 'menu-button is-primary' : 'menu-button'}
       onClick={onClick}
     >
-      {label}
-      <kbd className="menu-key">{bindingLabel([action], device)}</kbd>
+      {Icon && <Icon className="menu-button-icon" size={16} strokeWidth={1.75} aria-hidden />}
+      <span className="menu-button-label">{label}</span>
+      <KeyCap refs={[action]} />
     </button>
+  )
+}
+
+// One setting: its name (and current value), the key that changes it, the control and a hint.
+function Field({
+  label,
+  value,
+  keys,
+  hint,
+  children,
+}: {
+  label: string
+  value?: string
+  keys: BindingRef[]
+  hint?: string
+  children: ReactNode
+}) {
+  return (
+    <div className="menu-field">
+      <div className="menu-field-head">
+        <span className="ui-label">
+          {label}
+          {value && <span className="menu-field-value"> {value}</span>}
+        </span>
+        <KeyCap refs={keys} />
+      </div>
+      {children}
+      {hint && <div className="menu-hint">{hint}</div>}
+    </div>
   )
 }
 
@@ -151,16 +188,9 @@ function MenuButton({ label, action, onClick, primary }: MenuButtonProps) {
 // keep going to the menu's actions; the keyboard and gamepad cycle paints with prev / next.
 function PaintPicker() {
   const paintId = usePaintStore((s) => s.paintId)
-  const device = useInputStore((s) => s.device)
   const current = PAINTS.find((p) => p.id === paintId) ?? PAINTS[0]
   return (
-    <div className="menu-paint">
-      <div className="menu-paint-label">
-        <span>
-          <span className="hud-label">Paint</span> {current.name}
-        </span>
-        <kbd className="menu-key">{bindingLabel(['prev', 'next'], device)}</kbd>
-      </div>
+    <Field label="Paint" value={current.name} keys={['prev', 'next']}>
       <div className="menu-swatches" role="radiogroup" aria-label="Paint">
         {PAINTS.map((paint) => (
           <button
@@ -178,118 +208,69 @@ function PaintPicker() {
           />
         ))}
       </div>
-    </div>
+    </Field>
   )
 }
 
-// Assist mode, a segmented pair that never takes focus, like the paint swatches; the
-// keyboard and gamepad switch it with the assists action.
 function AssistPicker() {
   const mode = useAssistStore((s) => s.mode)
-  const device = useInputStore((s) => s.device)
   return (
-    <div className="menu-assists">
-      <div className="menu-paint-label">
-        <span className="hud-label">Assists</span>
-        <kbd className="menu-key">{bindingLabel(['assists'], device)}</kbd>
-      </div>
-      <div className="menu-segments" role="radiogroup" aria-label="Assists">
-        {ASSIST_MODES.map(({ id, name }) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={id === mode}
-            tabIndex={-1}
-            className={`menu-segment${id === mode ? ' is-selected' : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pick(() => useAssistStore.getState().setMode(id))}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <div className="menu-assists-hint">
-        {mode === 'beginner'
+    <Field
+      label="Assists"
+      keys={['assists']}
+      hint={
+        mode === 'beginner'
           ? 'Steadier drifts, steering and landings'
-          : 'Light help: catch your own slides'}
-      </div>
-    </div>
+          : 'Light help: catch your own slides'
+      }
+    >
+      <Segmented
+        label="Assists"
+        options={ASSIST_MODES}
+        value={mode}
+        onChange={(id) => pick(() => useAssistStore.getState().setMode(id))}
+      />
+    </Field>
   )
 }
 
-// Level choice on the main menu, a segmented pair like the assists.
 function LevelPicker() {
   const levelId = useLevelStore((s) => s.levelId)
-  const device = useInputStore((s) => s.device)
   return (
-    <div className="menu-assists">
-      <div className="menu-paint-label">
-        <span className="hud-label">Level</span>
-        <kbd className="menu-key">{bindingLabel(['level'], device)}</kbd>
-      </div>
-      <div className="menu-segments" role="radiogroup" aria-label="Level">
-        {LEVELS.map(({ level: { id }, name }) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={id === levelId}
-            tabIndex={-1}
-            className={`menu-segment${id === levelId ? ' is-selected' : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pick(() => useLevelStore.getState().setLevel(id))}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-    </div>
+    <Field label="Level" keys={['level']}>
+      <Segmented
+        label="Level"
+        options={LEVELS.map(({ level: { id }, name }) => ({ id, name }))}
+        value={levelId}
+        onChange={(id) => pick(() => useLevelStore.getState().setLevel(id))}
+      />
+    </Field>
   )
 }
 
-// Run mode on the main menu, on a level that has a reveal run; a segmented pair like the level.
+// Run mode, on a level that has a reveal run.
 function ModePicker() {
   const mode = useRunMode()
-  const device = useInputStore((s) => s.device)
   const stunts = useLevel().stunts
   if (!stunts) return null
   return (
-    <div className="menu-assists">
-      <div className="menu-paint-label">
-        <span className="hud-label">Mode</span>
-        <kbd className="menu-key">{bindingLabel(['mode'], device)}</kbd>
-      </div>
-      <div className="menu-segments" role="radiogroup" aria-label="Mode">
-        {RUN_MODES.map(({ id, name }) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={id === mode}
-            tabIndex={-1}
-            className={`menu-segment${id === mode ? ' is-selected' : ''}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pick(() => useModeStore.getState().setMode(id))}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <div className="menu-assists-hint">
-        {mode === 'reveal'
+    <Field
+      label="Mode"
+      keys={['mode']}
+      hint={
+        mode === 'reveal'
           ? 'Half-loop, inverted hold, drop, fleet jump: scored'
-          : 'Every ring in order, against the clock'}
-      </div>
-    </div>
+          : 'Every ring in order, against the clock'
+      }
+    >
+      <Segmented
+        label="Mode"
+        options={RUN_MODES}
+        value={mode}
+        onChange={(id) => pick(() => useModeStore.getState().setMode(id))}
+      />
+    </Field>
   )
-}
-
-const MEDAL_NAMES = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' }
-
-function MedalBadge({ medal }: { medal: Medal }) {
-  if (!medal) return null
-  return <span className={`menu-medal is-${medal}`}>{MEDAL_NAMES[medal]}</span>
 }
 
 // The saved best for the chosen level, mode and (for the reveal run) assist mode.
@@ -298,93 +279,116 @@ function BestLine() {
   const assist = useAssistStore((s) => s.mode)
   const bestTime = useRaceStore((s) => s.bestTime)
   const bestScore = useRaceStore((s) => s.bestScores[assist])
-  if (mode === 'reveal') {
-    return (
-      <div className="menu-best">
-        {bestScore === null ? (
-          'No best score yet'
-        ) : (
-          <>
-            <span className="hud-label">Best</span> {bestScore}{' '}
-            <MedalBadge medal={medalFor(bestScore, assist)} />
-          </>
-        )}
-      </div>
-    )
-  }
+  const reveal = mode === 'reveal'
+  const best = reveal ? bestScore : bestTime
   return (
     <div className="menu-best">
-      {bestTime === null ? (
-        'No best time yet'
+      <span className="ui-label">{reveal ? 'Best score' : 'Best time'}</span>
+      {best === null ? (
+        <span className="menu-best-empty">None yet</span>
       ) : (
-        <>
-          <span className="hud-label">Best</span> {formatTime(bestTime)}
-        </>
+        <span className="menu-best-value">
+          {reveal && <MedalChip medal={medalFor(best, assist)} />}
+          <span className="ui-mono">
+            {reveal ? best.toLocaleString('en-US') : formatTime(best)}
+          </span>
+        </span>
       )}
     </div>
   )
 }
 
-function MainMenu() {
-  const mode = useRunMode()
+function ControlsCard() {
   const device = useInputStore((s) => s.device)
   return (
-    <div className="menu">
-      <div className="menu-card">
-        <h1 className="menu-title">Roadster</h1>
-        <div className="menu-subtitle">{RUN_MODES.find((m) => m.id === mode)?.name}</div>
-        <LevelPicker />
-        <ModePicker />
-        <BestLine />
-        <PaintPicker />
-        <AssistPicker />
-        <div className="menu-buttons">
-          <MenuButton primary label="Play" action="confirm" onClick={play} />
-        </div>
-        <SoundSettings />
-        <dl className="menu-controls">
-          {CONTROLS.map(([refs, description]) => {
-            // Actions without a binding on this device (mute on a gamepad) are left out.
-            const label = bindingLabel(refs, device)
-            return (
-              label && (
-                <div key={description}>
-                  <dt>{label}</dt>
-                  <dd>{description}</dd>
-                </div>
-              )
-            )
-          })}
-        </dl>
-        <p className="menu-credit">
-          Car model by {CAR_MODEL_CREDIT.author} on{' '}
-          <a href={CAR_MODEL_CREDIT.source} target="_blank" rel="noreferrer">
-            {CAR_MODEL_CREDIT.site}
-          </a>
-          ,{' '}
-          <a href={CAR_MODEL_CREDIT.licenseUrl} target="_blank" rel="noreferrer">
-            {CAR_MODEL_CREDIT.license}
-          </a>
-          , modified
-        </p>
+    <aside className="menu-controls ui-panel">
+      <div className="menu-section-head">
+        <h3 className="menu-section-title">Controls</h3>
+        <span className="ui-label">{device === 'gamepad' ? 'Gamepad' : 'Keyboard'}</span>
       </div>
+      <dl className="menu-controls-list">
+        {CONTROLS.map(([refs, description]) => (
+          <div key={description}>
+            <dt>
+              <KeyCap refs={refs} />
+            </dt>
+            <dd>{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
+  )
+}
+
+function MainMenu() {
+  const mode = useRunMode()
+  return (
+    <div className="menu-main ui-root">
+      <aside className="menu-sidebar">
+        <header className="menu-brand">
+          <h1 className="menu-wordmark">Roadster</h1>
+          <div className="menu-tagline">{RUN_MODES.find((m) => m.id === mode)?.name}</div>
+        </header>
+        <div className="menu-sidebar-body">
+          <Section title="Run">
+            <LevelPicker />
+            <ModePicker />
+            <BestLine />
+          </Section>
+          <Section title="Car">
+            <PaintPicker />
+            <AssistPicker />
+          </Section>
+          <SoundSettings />
+        </div>
+        <footer className="menu-sidebar-foot">
+          <MenuButton primary icon={Play} label="Play" action="confirm" onClick={play} />
+          <p className="menu-credit">
+            Car model by {CAR_MODEL_CREDIT.author} on{' '}
+            <a href={CAR_MODEL_CREDIT.source} target="_blank" rel="noreferrer">
+              {CAR_MODEL_CREDIT.site}
+            </a>
+            ,{' '}
+            <a href={CAR_MODEL_CREDIT.licenseUrl} target="_blank" rel="noreferrer">
+              {CAR_MODEL_CREDIT.license}
+            </a>
+            , modified
+          </p>
+        </footer>
+      </aside>
+      <ControlsCard />
     </div>
   )
 }
 
 function PauseMenu() {
+  const levelName = useLevelName()
   return (
-    <div className="menu is-dim">
-      <div className="menu-card">
-        <h2 className="menu-heading">Paused</h2>
+    <div className="menu-overlay is-dim ui-root">
+      <div className="menu-dialog ui-panel">
+        <header className="menu-dialog-head">
+          <h2 className="menu-heading">Paused</h2>
+          <span className="ui-label">{levelName}</span>
+        </header>
         <div className="menu-buttons">
-          <MenuButton primary label="Resume" action="pause" onClick={resume} />
-          <MenuButton label="Restart" action="confirm" onClick={play} />
-          <MenuButton label="Quit" action="back" onClick={quit} />
+          <MenuButton primary icon={Play} label="Resume" action="pause" onClick={resume} />
+          <MenuButton icon={RotateCcw} label="Restart" action="confirm" onClick={play} />
+          <MenuButton icon={LogOut} label="Quit to menu" action="back" onClick={quit} />
         </div>
-        <AssistPicker />
-        <SoundSettings />
+        <div className="menu-dialog-settings">
+          <AssistPicker />
+          <SoundSettings />
+        </div>
       </div>
+    </div>
+  )
+}
+
+function ResultButtons() {
+  return (
+    <div className="menu-buttons">
+      <MenuButton primary icon={RotateCcw} label="Retry" action="confirm" onClick={play} />
+      <MenuButton icon={LogOut} label="Menu" action="back" onClick={quit} />
     </div>
   )
 }
@@ -397,40 +401,76 @@ function StuntResults() {
   const newBest = useRaceStore((s) => s.newBest)
   if (!score) return null
   return (
-    <div className="menu">
-      <div className="menu-card">
-        <h2 className="menu-heading">Reveal run</h2>
-        <div className="menu-time">{score.total}</div>
-        <div className="menu-best">
-          <MedalBadge medal={score.medal} />{' '}
-          {newBest ? (
-            <span className="menu-badge">New best!</span>
-          ) : (
-            best !== null && (
-              <>
-                <span className="hud-label">Best</span> {best}
-              </>
-            )
-          )}
+    <div className="menu-overlay ui-root">
+      <div className="menu-dialog is-wide ui-panel">
+        <header className="menu-dialog-head">
+          <h2 className="menu-heading">Reveal run</h2>
+          <span className="ui-label">
+            Scored as {ASSIST_MODES.find((m) => m.id === assist)?.name}
+          </span>
+        </header>
+        <div className="menu-result">
+          <div className="menu-result-value ui-mono">{score.total.toLocaleString('en-US')}</div>
+          <div className="menu-result-meta">
+            <MedalChip medal={score.medal} />
+            {newBest ? (
+              <span className="ui-chip is-new">New best</span>
+            ) : (
+              best !== null && (
+                <span className="ui-label">
+                  Best <span className="ui-mono">{best.toLocaleString('en-US')}</span>
+                </span>
+              )
+            )}
+          </div>
         </div>
         <table className="menu-breakdown">
           <tbody>
             {score.lines.map(({ label, detail, points }) => (
-              <tr key={label} className={points < 0 ? 'is-penalty' : undefined}>
+              <tr
+                key={label}
+                className={points < 0 ? 'is-penalty' : points === 0 ? 'is-zero' : undefined}
+              >
                 <th>{label}</th>
-                <td>{detail}</td>
-                <td>{formatPoints(points)}</td>
+                <td className="ui-mono">{detail}</td>
+                <td className="ui-mono">{formatPoints(points)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="menu-assists-hint">
-          Scored as {ASSIST_MODES.find((m) => m.id === assist)?.name}
+        <ResultButtons />
+      </div>
+    </div>
+  )
+}
+
+function TimeResults() {
+  const finalTime = useRaceStore((s) => s.finalTime ?? 0)
+  const bestTime = useRaceStore((s) => s.bestTime)
+  const newBest = useRaceStore((s) => s.newBest)
+  const levelName = useLevelName()
+  return (
+    <div className="menu-overlay ui-root">
+      <div className="menu-dialog ui-panel">
+        <header className="menu-dialog-head">
+          <h2 className="menu-heading">Finished</h2>
+          <span className="ui-label">{levelName}</span>
+        </header>
+        <div className="menu-result">
+          <div className="menu-result-value ui-mono">{formatTime(finalTime)}</div>
+          <div className="menu-result-meta">
+            {newBest ? (
+              <span className="ui-chip is-new">New best</span>
+            ) : (
+              bestTime !== null && (
+                <span className="ui-label">
+                  Best <span className="ui-mono">{formatTime(bestTime)}</span>
+                </span>
+              )
+            )}
+          </div>
         </div>
-        <div className="menu-buttons">
-          <MenuButton primary label="Retry" action="confirm" onClick={play} />
-          <MenuButton label="Menu" action="back" onClick={quit} />
-        </div>
+        <ResultButtons />
       </div>
     </div>
   )
@@ -439,35 +479,6 @@ function StuntResults() {
 function Results() {
   const reveal = useRaceStore((s) => s.mode === 'reveal')
   return reveal ? <StuntResults /> : <TimeResults />
-}
-
-function TimeResults() {
-  const finalTime = useRaceStore((s) => s.finalTime ?? 0)
-  const bestTime = useRaceStore((s) => s.bestTime)
-  const newBest = useRaceStore((s) => s.newBest)
-  return (
-    <div className="menu">
-      <div className="menu-card">
-        <h2 className="menu-heading">Finished</h2>
-        <div className="menu-time">{formatTime(finalTime)}</div>
-        <div className="menu-best">
-          {newBest ? (
-            <span className="menu-badge">New best!</span>
-          ) : (
-            bestTime !== null && (
-              <>
-                <span className="hud-label">Best</span> {formatTime(bestTime)}
-              </>
-            )
-          )}
-        </div>
-        <div className="menu-buttons">
-          <MenuButton primary label="Retry" action="confirm" onClick={play} />
-          <MenuButton label="Menu" action="back" onClick={quit} />
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // Main menu, pause menu and results screen over the canvas. Each screen unmounts when its

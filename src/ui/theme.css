@@ -1,0 +1,235 @@
+/* Design tokens and base classes for the HTML overlay (menus, HUD, boot screen). Satoshi is
+   loaded from Fontshare in index.html (its licence doesn't allow the files in a public repo);
+   IBM Plex Mono is bundled from @fontsource (main.tsx). Numbers always use the mono face. */
+
+:root {
+  --ui-bg: #0b1118;
+  --ui-surface: rgba(18, 28, 37, 0.94);
+  --ui-surface-2: #26333e;
+  --ui-surface-3: #35434e;
+  --ui-scrim: rgba(7, 11, 16, 0.55);
+  --ui-border: rgba(197, 212, 223, 0.16);
+  --ui-border-strong: rgba(197, 212, 223, 0.3);
+
+  --ui-text: #edf1f4;
+  --ui-text-muted: #c0cbd3;
+  --ui-text-faint: #8d9eac;
+
+  --ui-accent: #f18d80;
+  --ui-accent-hover: #f5a296;
+  --ui-on-accent: #1a0f0d;
+
+  --ui-fuel: #7cc4e8;
+  --ui-warn: #edc18f;
+  --ui-ok: #a9dcc0;
+  --ui-danger: #f0857a;
+  --ui-violet: #c3b1f0;
+
+  --ui-gold: #e8c872;
+  --ui-silver: #c9d3dc;
+  --ui-bronze: #d9a27a;
+
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+  --ui-gutter: 20px;
+
+  --ui-font: 'Satoshi', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ui-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ui-ease: 0.16s ease;
+}
+
+.ui-root {
+  font-family: var(--ui-font);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ui-text);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ui-panel {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+}
+
+.ui-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ui-text-faint);
+}
+
+.ui-mono {
+  font-family: var(--ui-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-unit {
+  margin-left: 4px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ui-text-faint);
+}
+
+/* Key or pad button hint. */
+.ui-keys {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+
+.ui-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--ui-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+}
+
+/* Segmented radio group (level, mode, assists). */
+.ui-segments {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.ui-segment {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-faint);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ui-ease),
+    color var(--ui-ease);
+}
+
+.ui-segment:hover {
+  color: var(--ui-text);
+}
+
+.ui-segment.is-selected {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
+}
+
+/* Label, value and bar (fuel, fans, hold). */
+.ui-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ui-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ui-meter-value {
+  font-size: 12px;
+  color: var(--ui-text-muted);
+}
+
+.ui-meter-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(197, 212, 223, 0.14);
+  overflow: hidden;
+}
+
+.ui-meter-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--meter-color, var(--ui-fuel));
+  transition: background var(--ui-ease);
+}
+
+/* Faint label over a mono value. */
+.ui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ui-stat-value {
+  font-size: 13px;
+  color: var(--ui-text);
+  white-space: nowrap;
+}
+
+/* Small tinted chips: medals, "New best". */
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--chip-color, var(--ui-text)) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chip-color, var(--ui-text)) 14%, transparent);
+  color: var(--chip-color, var(--ui-text));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-chip.is-gold {
+  --chip-color: var(--ui-gold);
+}
+
+.ui-chip.is-silver {
+  --chip-color: var(--ui-silver);
+}
+
+.ui-chip.is-bronze {
+  --chip-color: var(--ui-bronze);
+}
+
+.ui-chip.is-new {
+  --chip-color: var(--ui-accent);
+}
+
+/* Status: a coloured dot and a label. */
+.ui-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dot-color, var(--ui-text-faint));
+}
+
+/* Animations that move things have fade-only versions next to them (Hud.css). */
+@media (prefers-reduced-motion: reduce) {
+  .ui-root *,
+  .ui-root *::before,
+  .ui-root *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

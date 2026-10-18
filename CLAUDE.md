@@ -40,7 +40,7 @@ Local Node (alternative):
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect
 - `audio/` — synthesized sound and music (Web Audio API, no files); starts on the first click or key press
 - `input/` — input layer: keyboard and gamepads mapped to actions
-- `ui/` — HTML overlay (HUD, menus)
+- `ui/` — HTML overlay (HUD, menus); colours, fonts and base classes are tokens in `theme.css`, shared pieces (key caps, segmented pickers, meters) in `components.tsx`
 - `state/` — Zustand stores
 - `config/` — `tuning.ts`, `bindings.ts` and other config
 

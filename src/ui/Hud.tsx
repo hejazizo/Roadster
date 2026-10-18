@@ -1,6 +1,8 @@
+import type { CSSProperties } from 'react'
 import { TUNING } from '../config/tuning'
 import { useCarStore } from '../state/carStore'
 import { useRaceStore } from '../state/raceStore'
+import { Meter, Stat } from './components'
 import './Hud.css'
 import RaceHud from './RaceHud'
 
@@ -11,27 +13,17 @@ function Speed() {
   const kmh = useCarStore((s) => Math.round(s.speed * MS_TO_KMH))
   return (
     <div className="hud-speed">
-      {kmh}
-      <span className="hud-unit">km/h</span>
+      <span className="hud-speed-value ui-mono">{kmh}</span>
+      <span className="ui-unit">km/h</span>
     </div>
   )
 }
 
-function FuelBar() {
-  const fuel = useCarStore((s) => s.fuel)
+function FuelMeter() {
+  const percent = useCarStore((s) => Math.round(Math.min(s.fuel / TUNING.car.fuel.max, 1) * 100))
   const draining = useCarStore((s) => s.boosting || s.gliding || s.suction > 0 || s.lifting)
-  const fraction = Math.min(fuel / TUNING.car.fuel.max, 1)
-  const className = ['hud-fuel', draining && 'is-draining', fuel <= 0 && 'is-empty']
-    .filter(Boolean)
-    .join(' ')
-  return (
-    <div className={className}>
-      <span className="hud-label">Fuel</span>
-      <div className="hud-fuel-track">
-        <div className="hud-fuel-fill" style={{ width: `${fraction * 100}%` }} />
-      </div>
-    </div>
-  )
+  const color = percent <= 0 ? 'var(--ui-danger)' : draining ? 'var(--ui-warn)' : 'var(--ui-fuel)'
+  return <Meter label="Fuel" fraction={percent / 100} value={`${percent}%`} color={color} />
 }
 
 // Suction, shown while the fans are engaged.
@@ -40,16 +32,35 @@ function FansMeter() {
   const suction = useCarStore((s) => s.suction)
   if (!fans && suction === 0) return null
   return (
-    <div className="hud-fans">
-      <span className="hud-label">Fans</span>
-      <div className="hud-fuel-track">
-        <div className="hud-fans-fill" style={{ width: `${suction * 100}%` }} />
-      </div>
-    </div>
+    <Meter
+      label="Fans"
+      fraction={suction}
+      value={`${Math.round(suction * 100)}%`}
+      color="var(--ui-violet)"
+    />
   )
 }
 
 const HOLD_LABELS = { wall: 'Wall hold', ceiling: 'Ceiling hold' }
+
+const STATUS_COLORS: Record<string, string> = {
+  grounded: 'var(--ui-ok)',
+  drifting: 'var(--ui-violet)',
+  airborne: 'var(--ui-warn)',
+  gliding: 'var(--ui-fuel)',
+  overturned: 'var(--ui-text-faint)',
+  hold: 'var(--ui-accent)',
+  jets: 'var(--ui-text)',
+}
+
+function StatusChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="hud-status">
+      <span className="ui-dot" style={{ '--dot-color': color } as CSSProperties} />
+      {label}
+    </span>
+  )
+}
 
 function Status() {
   const status = useCarStore((s) =>
@@ -67,9 +78,9 @@ function Status() {
   const lifting = useCarStore((s) => s.lifting)
   return (
     <div className="hud-statuses">
-      <div className={`hud-status is-${status.toLowerCase()}`}>{status}</div>
-      {hold !== 'none' && <div className={`hud-status is-${hold}`}>{HOLD_LABELS[hold]}</div>}
-      {lifting && <div className="hud-status is-jets">Jets</div>}
+      <StatusChip label={status} color={STATUS_COLORS[status.toLowerCase()]} />
+      {hold !== 'none' && <StatusChip label={HOLD_LABELS[hold]} color={STATUS_COLORS.hold} />}
+      {lifting && <StatusChip label="Jets" color={STATUS_COLORS.jets} />}
     </div>
   )
 }
@@ -83,23 +94,15 @@ function AirReadout() {
   if (!airborne) return null
   const rising = !vertical.startsWith('-')
   return (
-    <dl className="hud-air">
-      <dt>Height</dt>
-      <dd>
-        {height}
-        <span className="hud-unit">m</span>
-      </dd>
-      <dt>Vertical</dt>
-      <dd>
-        {rising ? '↑' : '↓'} {vertical.replace('-', '')}
-        <span className="hud-unit">m/s</span>
-      </dd>
-      <dt>Roll</dt>
-      <dd>
-        {turns}
-        <span className="hud-unit">turns</span>
-      </dd>
-    </dl>
+    <div className="hud-air">
+      <Stat label="Height" value={height} unit="m" />
+      <Stat
+        label="Vertical"
+        value={`${rising ? '↑' : '↓'}${vertical.replace('-', '')}`}
+        unit="m/s"
+      />
+      <Stat label="Roll" value={turns} unit="turns" />
+    </div>
   )
 }
 
@@ -108,12 +111,14 @@ export default function Hud() {
   const inMenu = useRaceStore((s) => s.phase === 'menu')
   if (inMenu) return null
   return (
-    <div className="hud">
-      <div className="hud-panel">
+    <div className="hud ui-root">
+      <div className="hud-panel ui-panel">
         <Status />
         <Speed />
-        <FuelBar />
-        <FansMeter />
+        <div className="hud-meters">
+          <FuelMeter />
+          <FansMeter />
+        </div>
         <AirReadout />
       </div>
       <RaceHud />
