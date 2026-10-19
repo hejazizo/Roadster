@@ -41,6 +41,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.6 | Reveal: night facility art     | 3 · Details | ☑      |
 | 16.7 | Interface redesign             | 3 · Details | ☑      |
 | 16.8 | Gauge HUD & menu polish        | 3 · Details | ☑      |
+| 16.9 | Electric drivetrain sound      | 3 · Details | ☐      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
 | 19   | Release polish                 | 3 · Details | ☐      |
@@ -179,7 +180,7 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 ## Phase 3 — Details & polish
 
-Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order). M16.7 is independent of the reveal and was done before M16.6; M16.8 builds on M16.7.
+Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order). M16.7 is independent of the reveal and was done before M16.6; M16.8 builds on M16.7; M16.9 replaces M14's motor sound and is independent of the rest.
 
 ### M11 — Hero Roadster model
 
@@ -722,6 +723,36 @@ Checked in headless Chrome (CDP, dev server), with a stubbed gamepad for pad-onl
 - no console errors.
 
 Sim (`npm run sim:car`): output identical to M16.7, byte for byte. `lint`, `build` and `format:check` pass. Bundle: `index` +4.8 kB gzip, CSS +2 kB gzip (`docs/performance.md`).
+
+### M16.9 — Electric drivetrain sound
+
+M14's motor is a synth stand-in: two detuned saws and a sine pitched by speed, so it reads as a buzz, not a car. Keep the car electric (it is a Roadster-style EV), but make it sound like a real one by building the drivetrain from recorded samples, the way racing games do, instead of synthesizing it. This is the first milestone with audio files; M14's "no files" rule now covers the one-shots, UI sounds and music only.
+
+- **Samples:**
+  - recordings of a real EV drivetrain: motor and inverter tone at a few speed bands (pulling away, cruising, high speed), on load (accelerating) and off load / regen (coasting and braking), plus a gear-reduction whine and road and tyre rumble;
+  - CC0, or a licence that allows redistribution in a public repository; credit each one in `src/config/assets.ts` (with a licence file next to the sources in `assets/`), the way the car model is;
+  - seamless loop points, trimmed and normalised, in `public/audio/` in a format every target browser decodes (check Safari);
+  - a total budget of about 500 kB.
+- **Loading:**
+  - fetched and decoded after the first user gesture (when the audio context starts), so they never block the first paint or the menu;
+  - referenced through `import.meta.env.BASE_URL`;
+  - M14's synth motor plays until they're decoded, and stays as the fallback if a fetch or decode fails.
+- **Mapping:**
+  - speed picks the band, with equal-power crossfades between neighbouring bands and `playbackRate` bending pitch within each, so there are no jumps or clicks at a band change;
+  - throttle crossfades from the off-load layer to the on-load one, with more level and brightness;
+  - braking and lifting off bring in the regen tone;
+  - the gear whine and road rumble follow wheel speed, and the rumble goes quiet in the air;
+  - in the air the motor spins up freely with throttle (the wheels are unloaded), then drops back on landing.
+- **Boost and the rest:** boost adds a power-surge layer on top of the drivetrain (the thruster roar stays); wind, tyre squeal, fans, jets and one-shots stay as they are, rebalanced against the new drivetrain.
+- **Tuning:** bands, crossfade ranges, levels and pitch ranges in `TUNING.audio` (read live, with a folder in the tuning panel).
+- **Docs:** the sample sources and licences, the size in `docs/performance.md`, and `CLAUDE.md`'s `audio/` line (no longer "no files").
+
+**Done when:**
+
+- pulling away, cruising, flat out, coasting, braking, boosting and flying each sound distinct and like a real EV in a listening pass;
+- there are no clicks, gaps or pitch jumps at loop points or band changes;
+- the samples load without blocking startup, and the fallback works with them missing;
+- `dev`, `build` and `lint` pass, and the sim is unaffected.
 
 ### M17 — More levels & game modes
 
