@@ -17,8 +17,9 @@ export type ButtonAction =
   | 'back' // on a menu screen
   | 'prev' // previous option on a menu screen (paint)
   | 'next' // next option on a menu screen
+  | 'up' // move the menu focus up
+  | 'down' // move the menu focus down
   | 'assists' // switch assist mode on the main and pause menus
-  | 'level' // switch level on the main menu
   | 'mode' // switch run mode (time trial / reveal run) on the main menu
   | 'mute' // sound on / off
   | 'camera' // debug orbit cam
@@ -34,9 +35,13 @@ export type AxisBinding = {
   pad: PadAxisSource[]
 }
 
+// One direction of a stick axis, held past TUNING.input.navThreshold (menu navigation).
+export type PadStickSource = { axis: number; sign: 1 | -1 }
+
 export type ButtonBinding = {
   keys: string[]
   pad: number[] // button indices
+  stick?: PadStickSource[]
 }
 
 // Standard-mapping gamepad buttons (Xbox names).
@@ -50,6 +55,8 @@ const LT = 6
 const RT = 7
 const VIEW = 8
 const MENU = 9
+const DPAD_UP = 12
+const DPAD_DOWN = 13
 const DPAD_LEFT = 14
 const DPAD_RIGHT = 15
 
@@ -79,10 +86,11 @@ export const BINDINGS: {
   },
   buttons: {
     boost: { keys: ['ShiftLeft', 'ShiftRight'], pad: [B] },
-    hop: { keys: ['Space'], pad: [A] },
+    hop: { keys: ['KeyG'], pad: [RB] },
     handbrake: { keys: ['KeyE'], pad: [X] },
     fans: { keys: ['KeyF'], pad: [LB] },
-    lift: { keys: ['KeyG'], pad: [RB] },
+    // The jets are the Proving Ground's main move, so they get the easiest key and button.
+    lift: { keys: ['Space'], pad: [A] },
     // The handbrake's button: it does nothing in the air.
     airRoll: { keys: ['KeyE'], pad: [X] },
     reset: { keys: ['KeyR'], pad: [Y] },
@@ -90,10 +98,12 @@ export const BINDINGS: {
     restart: { keys: ['Enter'], pad: [VIEW] },
     confirm: { keys: ['Enter'], pad: [A] },
     back: { keys: ['KeyQ'], pad: [B] },
-    prev: { keys: ['ArrowLeft', 'KeyA'], pad: [DPAD_LEFT] },
-    next: { keys: ['ArrowRight', 'KeyD'], pad: [DPAD_RIGHT] },
+    prev: { keys: ['ArrowLeft', 'KeyA'], pad: [DPAD_LEFT], stick: [{ axis: 0, sign: -1 }] },
+    next: { keys: ['ArrowRight', 'KeyD'], pad: [DPAD_RIGHT], stick: [{ axis: 0, sign: 1 }] },
+    // The stick's Y axis is negative when pushed forward.
+    up: { keys: ['ArrowUp', 'KeyW'], pad: [DPAD_UP], stick: [{ axis: 1, sign: -1 }] },
+    down: { keys: ['ArrowDown', 'KeyS'], pad: [DPAD_DOWN], stick: [{ axis: 1, sign: 1 }] },
     assists: { keys: ['KeyT'], pad: [Y] },
-    level: { keys: ['KeyL'], pad: [RB] },
     // The fans' button, which does nothing on a menu.
     mode: { keys: ['KeyN'], pad: [LB] },
     mute: { keys: ['KeyM'], pad: [] },
@@ -126,26 +136,55 @@ const padButtonLabel = (index: number) => PAD_BUTTON_LABELS[index] ?? `Button ${
 // A button, or one direction of an axis.
 export type BindingRef = ButtonAction | [AxisAction, 1 | -1]
 
-function refLabel(ref: BindingRef, device: Device): string | undefined {
+// What a binding is on a device, for drawing it: a key, a pad button or a stick.
+export type BindingSource = { key: string } | { button: number } | { stick: number }
+
+function refSource(ref: BindingRef, device: Device): BindingSource | undefined {
   if (typeof ref === 'string') {
     const { keys, pad } = BINDINGS.buttons[ref]
-    if (device === 'keyboard') return keys[0] && keyLabel(keys[0])
-    return pad[0] === undefined ? undefined : padButtonLabel(pad[0])
+    if (device === 'keyboard') return keys[0] === undefined ? undefined : { key: keys[0] }
+    return pad[0] === undefined ? undefined : { button: pad[0] }
   }
   const [action, dir] = ref
   const { keys, pad } = BINDINGS.axes[action]
   if (device === 'keyboard') {
     const key = (dir > 0 ? keys.positive : keys.negative)[0]
-    return key && keyLabel(key)
+    return key === undefined ? undefined : { key }
   }
   // A stick covers both directions; a trigger only its own.
   const source = pad.find((s) => 'stick' in s || s.sign === dir)
   if (!source) return undefined
-  return 'stick' in source ? PAD_STICK_LABELS[source.stick] : padButtonLabel(source.button)
+  return 'stick' in source ? { stick: source.stick } : { button: source.button }
+}
+
+export function sourceLabel(source: BindingSource): string {
+  if ('key' in source) return keyLabel(source.key)
+  if ('button' in source) return padButtonLabel(source.button)
+  return PAD_STICK_LABELS[source.stick] ?? `Stick ${source.stick}`
+}
+
+const sourceId = (source: BindingSource) =>
+  'key' in source
+    ? `k${keyLabel(source.key)}`
+    : 'button' in source
+      ? `b${source.button}`
+      : `s${Math.floor(source.stick / 2)}`
+
+// The first binding of each ref on a device, without repeats (W / S on the keyboard, but
+// one "Left stick" for steering both ways).
+export function bindingSources(refs: BindingRef[], device: Device): BindingSource[] {
+  const seen = new Set<string>()
+  const sources: BindingSource[] = []
+  for (const ref of refs) {
+    const source = refSource(ref, device)
+    if (!source || seen.has(sourceId(source))) continue
+    seen.add(sourceId(source))
+    sources.push(source)
+  }
+  return sources
 }
 
 // Display label for the first binding of each ref on a device, e.g. "W / S" or "RT / LT".
 export function bindingLabel(refs: BindingRef[], device: Device): string {
-  const labels = refs.map((ref) => refLabel(ref, device)).filter((l) => l !== undefined)
-  return [...new Set(labels)].join(' / ')
+  return bindingSources(refs, device).map(sourceLabel).join(' / ')
 }

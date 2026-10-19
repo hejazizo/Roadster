@@ -1,5 +1,5 @@
-/* In-run overlay: telemetry bottom-left, timer and objective top-centre, countdown, popups.
-   Tokens in theme.css. */
+/* In-run overlay: the speed gauge and air readout bottom-right, the timer and objective
+   top-centre, countdown, popups. Tokens in theme.css. */
 
 .hud {
   position: absolute;
@@ -7,62 +7,292 @@
   pointer-events: none; /* clicks and drags go through to the canvas */
 }
 
-/* ---- Telemetry ---- */
+/* ---- Gauge ---- */
 
-.hud-panel {
+.hud-dash {
   position: absolute;
-  left: var(--ui-gutter);
+  right: var(--ui-gutter);
   bottom: var(--ui-gutter);
   display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.gauge {
+  /* The dial's size; everything inside scales with it. */
+  --gauge-size: clamp(260px, 40vh, 360px);
+  position: relative;
+  display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 232px;
-  padding: 14px 16px;
-  box-sizing: border-box;
-}
-
-.hud-statuses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  min-height: 18px;
-}
-
-.hud-status {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ui-text-muted);
-  white-space: nowrap;
+  width: var(--gauge-size);
 }
 
-.hud-speed {
+.gauge::before {
+  /* A soft dark disc behind the dial, so it reads over a bright sky. */
+  position: absolute;
+  top: 4%;
+  left: 4%;
+  width: 92%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(7, 11, 16, 0.62) 0%,
+    rgba(7, 11, 16, 0.38) 62%,
+    transparent 72%
+  );
+  content: '';
+}
+
+.gauge-svg {
+  position: relative;
+  display: block;
+  width: var(--gauge-size);
+  height: var(--gauge-size);
+  overflow: visible;
+}
+
+.gauge-svg path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.gauge-track {
+  stroke: rgba(197, 212, 223, 0.12);
+  stroke-width: 8;
+}
+
+.gauge-track.is-thin {
+  stroke-width: 3;
+}
+
+.gauge-speed,
+.gauge-fuel,
+.gauge-fans {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+}
+
+.gauge-speed {
+  stroke: var(--ui-text);
+  stroke-width: 8;
+  transition:
+    stroke var(--ui-ease),
+    filter var(--ui-ease);
+}
+
+.gauge.is-boosting .gauge-speed {
+  stroke: var(--ui-accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--ui-accent) 80%, transparent));
+}
+
+.gauge-boost-zone {
+  stroke: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  stroke-width: 2;
+  stroke-linecap: butt !important;
+}
+
+.gauge-tick {
+  stroke: var(--ui-text-faint);
+  stroke-width: 1;
+}
+
+.gauge-tick.is-major {
+  stroke: var(--ui-text-muted);
+  stroke-width: 1.6;
+}
+
+.gauge-tick.is-boost {
+  stroke: var(--ui-accent);
+}
+
+.gauge-label {
+  font-family: var(--ui-mono);
+  font-size: 11px;
+  fill: var(--ui-text-muted);
+}
+
+.gauge-fuel {
+  stroke: var(--ui-fuel);
+  stroke-width: 3;
+  transition: stroke var(--ui-ease);
+}
+
+.gauge-fuel.is-draining {
+  stroke: var(--ui-warn);
+}
+
+.gauge-fuel.is-empty {
+  stroke: var(--ui-danger);
+}
+
+.gauge-fans,
+.gauge-fans-track {
+  opacity: 0;
+  transition: opacity var(--ui-move);
+}
+
+.gauge-fans {
+  stroke: var(--ui-violet);
+  stroke-width: 3;
+}
+
+.gauge.has-fans .gauge-fans,
+.gauge.has-fans .gauge-fans-track {
+  opacity: 1;
+}
+
+.gauge-center {
+  position: absolute;
+  top: calc(var(--gauge-size) * 0.5);
+  left: 50%;
   display: flex;
-  align-items: baseline;
-  gap: 2px;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -54%);
 }
 
-.hud-speed-value {
-  font-size: 40px;
+.gauge-digits {
+  font-size: calc(var(--gauge-size) * 0.24);
   font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+  color: var(--ui-text);
+  text-shadow: var(--ui-shadow-text);
+  transition: color var(--ui-ease);
 }
 
-.hud-meters {
+.gauge.is-boosting .gauge-digits {
+  color: var(--ui-accent);
+}
+
+.gauge-unit {
+  margin-top: 4px;
+  font-size: calc(var(--gauge-size) * 0.055);
+  font-weight: 500;
+  color: var(--ui-text-faint);
+}
+
+.gauge-fuel-readout {
+  position: absolute;
+  top: calc(var(--gauge-size) * 0.815);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: calc(var(--gauge-size) * 0.058);
+  color: var(--ui-fuel);
+  transform: translate(-50%, -50%);
+  transition: color var(--ui-ease);
+}
+
+.gauge-fuel-readout.is-draining {
+  color: var(--ui-warn);
+}
+
+.gauge-fuel-readout.is-empty {
+  color: var(--ui-danger);
+}
+
+.gauge-status {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 42px;
+  margin-top: -6px;
+  text-shadow: var(--ui-shadow-text);
+}
+
+.gauge-status-main {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--status-color, var(--ui-text));
+  transition: color var(--ui-ease);
+}
+
+.gauge-status-extra {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text-muted);
+}
+
+/* ---- Air readout ---- */
+
+.hud-air {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 72px;
+  padding: 14px 18px 14px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-glass);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateX(16px);
+  transition:
+    opacity var(--ui-move),
+    transform var(--ui-move);
+}
+
+.hud-air.is-shown {
+  opacity: 1;
+  transform: none;
+}
+
+.hud-air-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.hud-air .ui-stat-value {
+  font-size: 17px;
+}
+
+.hud-air .ui-label {
+  font-size: 13px;
+}
+
+.hud-air .ui-stat {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.hud-air {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--ui-border);
+.hud-attitude {
+  width: 84px;
+  height: 84px;
+  flex: none;
+}
+
+.hud-attitude-ring {
+  fill: rgba(7, 11, 16, 0.35);
+  stroke: var(--ui-border-strong);
+  stroke-width: 1;
+}
+
+.hud-attitude-horizon {
+  stroke: var(--ui-text-faint);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.hud-attitude-car {
+  fill: var(--ui-text);
+}
+
+.hud-attitude-car.is-cabin {
+  fill: var(--ui-text-muted);
+}
+
+.hud-attitude-up {
+  fill: var(--ui-accent);
 }
 
 /* ---- Timer and objective ---- */
@@ -78,41 +308,73 @@
   gap: 10px;
 }
 
-.race-panel {
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-}
-
 .race-head {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 10px 18px;
+  gap: 18px;
+  text-shadow: var(--ui-shadow-text);
 }
 
 .race-time {
-  font-size: 26px;
+  font-size: 48px;
   font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .race-head-rule {
   align-self: stretch;
   width: 1px;
-  background: var(--ui-border);
+  background: var(--ui-border-strong);
+}
+
+.race-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.race-counter .ui-label {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+
+.race-counter-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
+  transform-origin: left center;
+  animation: race-pop 0.42s var(--ui-ease-out);
+}
+
+.race-counter-total {
+  color: var(--ui-text-faint);
+  font-size: 20px;
+}
+
+@keyframes race-pop {
+  30% {
+    color: var(--ui-accent);
+    transform: scale(1.18);
+  }
 }
 
 .race-objective {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 520px;
-  padding: 12px 16px 14px;
+  width: 640px;
+  max-width: calc(100vw - 2 * var(--ui-gutter));
+  padding: 14px 20px 16px;
   box-sizing: border-box;
-  border-top: 1px solid var(--ui-border);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-glass);
+  backdrop-filter: blur(8px);
 }
 
 .race-steps {
@@ -132,41 +394,84 @@
 }
 
 .race-step-bar {
-  height: 3px;
+  position: relative;
+  height: 5px;
+  overflow: hidden;
   border-radius: 2px;
-  background: rgba(197, 212, 223, 0.14);
+  background: rgba(197, 212, 223, 0.16);
   transition: background var(--ui-ease);
 }
 
 .race-step-name {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ui-text-faint);
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color var(--ui-ease);
 }
 
 .race-step.is-done .race-step-bar {
   background: var(--ui-ok);
+  animation: race-step-done 0.5s var(--ui-ease-out);
 }
 
 .race-step.is-failed .race-step-bar {
   background: var(--ui-danger);
+  animation: race-step-done 0.5s var(--ui-ease-out);
+}
+
+.race-step.is-done .race-step-name {
+  color: var(--ui-text-muted);
 }
 
 .race-step.is-current .race-step-bar {
+  background: rgba(237, 241, 244, 0.32);
+}
+
+/* The current step's bar: a sweep while under way, the hold's progress while holding. */
+.race-step.is-current .race-step-bar::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: var(--ui-text);
+  content: '';
+  animation: race-step-sweep 1.6s ease-in-out infinite;
+}
+
+.race-step.is-holding .race-step-bar::after {
+  background: var(--ui-accent);
+  transform: scaleX(var(--hold, 0));
+  transform-origin: left;
+  animation: none;
 }
 
 .race-step.is-current .race-step-name {
   color: var(--ui-text);
 }
 
+@keyframes race-step-done {
+  from {
+    transform: scaleY(2.5);
+    filter: brightness(1.6);
+  }
+}
+
+@keyframes race-step-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .race-objective-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  animation: race-slide-in 0.36s var(--ui-ease-out);
 }
 
 .race-objective-step {
@@ -176,23 +481,30 @@
 }
 
 .race-objective-name {
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 700;
 }
 
 .race-objective-hint {
-  font-size: 13px;
-  line-height: 22px;
+  font-size: 16px;
+  line-height: 30px;
   color: var(--ui-text-muted);
 }
 
 .race-objective-hint .ui-keys {
   margin: 0 2px;
-  vertical-align: 1px;
+  vertical-align: -7px;
 }
 
 .race-objective-hold {
   margin-top: 4px;
+}
+
+@keyframes race-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
 }
 
 /* ---- Countdown ---- */
@@ -205,25 +517,53 @@
 }
 
 .race-message-main {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 200px;
   font-family: var(--ui-mono);
-  font-size: 96px;
+  font-size: 120px;
   font-weight: 500;
   line-height: 1;
   color: var(--ui-text);
   text-shadow: 0 4px 24px rgba(7, 11, 16, 0.45);
-  animation: race-count 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: race-count 0.45s var(--ui-ease-out);
 }
 
 .race-message-main.is-go {
+  width: auto;
   font-family: var(--ui-font);
   font-weight: 700;
   color: var(--ui-accent);
+}
+
+/* A ring that runs down over each second of the countdown. */
+.race-message-ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.race-message-ring circle {
+  fill: rgba(7, 11, 16, 0.28);
+  stroke: var(--ui-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  animation: race-ring 1s linear forwards;
 }
 
 @keyframes race-count {
   from {
     opacity: 0;
     transform: scale(1.25);
+  }
+}
+
+@keyframes race-ring {
+  to {
+    stroke-dashoffset: 1;
   }
 }
 
@@ -240,19 +580,20 @@
   --dot-color: var(--ui-text);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 10px;
+  padding: 8px 16px;
   border: 1px solid var(--ui-border);
-  border-radius: 999px;
+  border-left: 3px solid var(--dot-color);
+  border-radius: var(--ui-radius-md);
   background: var(--ui-surface);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
-  animation: race-popup 1.8s ease-out forwards;
+  animation: race-popup 1.8s var(--ui-ease-out) forwards;
 }
 
 .race-popup-points {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--dot-color);
 }
 
@@ -268,17 +609,19 @@
 @keyframes race-popup {
   0% {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateX(40px);
   }
-  10% {
+  14% {
     opacity: 1;
     transform: none;
   }
   80% {
     opacity: 1;
+    transform: none;
   }
   100% {
     opacity: 0;
+    transform: translateX(-24px);
   }
 }
 
@@ -297,8 +640,28 @@
     animation-name: race-fade;
   }
 
-  .race-message-main {
+  .race-message-main,
+  .race-counter-value,
+  .race-step.is-done .race-step-bar,
+  .race-step.is-failed .race-step-bar {
     animation: none;
+  }
+
+  .race-step.is-current .race-step-bar::after {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .race-objective-body {
+    animation-name: ui-fade-in;
+  }
+
+  .race-message-ring circle {
+    animation: none;
+  }
+
+  .hud-air {
+    transform: none;
   }
 }
 
@@ -313,7 +676,8 @@
     display: none;
   }
 
-  .hud-panel {
-    width: 200px;
+  .hud-dash {
+    transform: scale(0.7);
+    transform-origin: right bottom;
   }
 }

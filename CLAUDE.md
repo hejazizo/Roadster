@@ -16,7 +16,7 @@ Docker (only Docker needed on the host):
 - `make shell` — bash inside the container; `make clean` — remove image and volumes
 - `make car-model` — rebuild `public/models/car.glb` from the source model (see `docs/car-model-spec.md`)
 - `make fleet-models` — rebuild `public/models/fleet/*.glb`, the Proving Ground's parked cars, built in code from `src/scene/fleetData.ts`
-- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip), the fleet jump (kickflip, hits) and the reveal run's steps and scoring (`src/state/stuntRun.ts`) for each assist mode on both levels (Test Track and Proving Ground); run it after changing car tuning or a level
+- `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip), the fleet jump (kickflip, hits) and the reveal run's steps and scoring (`src/state/stuntRun.ts`) for each assist mode on the Proving Ground and on the Test Track (`testLevel.ts`, no longer in the game, kept as the sim's handling test ground); run it after changing car tuning or a level
 
 The container keeps its own `node_modules`; `make dev` reinstalls when `package.json`/`package-lock.json` change.
 
@@ -34,14 +34,14 @@ Local Node (alternative):
 
 ## Folders (`src/`)
 
-- `scene/` — world: ground, lights, level geometry; levels are data (`levelData.ts` types, `fleetData.ts` parked-car shapes, `testLevel.ts`, `provingGround.ts`, listed in `levels.ts`)
+- `scene/` — world: ground, lights, level geometry; levels are data (`levelData.ts` types, `fleetData.ts` parked-car shapes, `provingGround.ts`, listed in `levels.ts`; `testLevel.ts` is only used by the sim)
   - `scene/art/` — level art drawn over the greybox colliders (night sky, ground and markings, floodlights, fence, scenery), from data in `artData.ts` (types) and `provingGroundArt.ts`; a level without `art` stays greybox under the day sky
 - `car/` — car physics and controls
-- `camera/` — chase / debug cameras
+- `camera/` — chase / debug cameras, and `MenuFraming.tsx` (the main menu's view offset that lifts the car above the bottom bar)
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect
 - `audio/` — synthesized sound and music (Web Audio API, no files); starts on the first click or key press
 - `input/` — input layer: keyboard and gamepads mapped to actions
-- `ui/` — HTML overlay (HUD, menus); colours, fonts and base classes are tokens in `theme.css`, shared pieces (key caps, segmented pickers, meters) in `components.tsx`
+- `ui/` — HTML overlay (HUD, menus); colours, fonts and base classes are tokens in `theme.css`, shared pieces (key caps, segmented pickers, choice cards, sheets, meters) in `components.tsx`, key and pad glyphs in `glyphs.tsx`, the round speed gauge in `Speedometer.tsx`. Menus use a virtual focus (`menuNav.ts`: d-pad / stick / arrows move a focus ring, nothing takes DOM focus) and `motion.ts` for count-ups; anything that moves has a fade-only version under `prefers-reduced-motion`
 - `state/` — Zustand stores
 - `config/` — `tuning.ts`, `bindings.ts` and other config
 

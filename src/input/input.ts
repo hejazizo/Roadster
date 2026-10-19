@@ -141,7 +141,7 @@ function pollGamepads() {
     useInputStore.setState({ gamepads: pads.length })
   }
 
-  const { buttonThreshold } = TUNING.input
+  const { buttonThreshold, navThreshold, navRelease } = TUNING.input
   const buttons = new Set<ButtonAction>()
   let active = false
   for (const action of AXIS_ACTIONS) {
@@ -153,8 +153,14 @@ function pollGamepads() {
     if (value !== 0) active = true
   }
   for (const action of BUTTON_ACTIONS) {
-    const down = pads.some((pad) =>
-      BINDINGS.buttons[action].pad.some((i) => (pad.buttons[i]?.value ?? 0) > buttonThreshold),
+    const { pad: indices, stick = [] } = BINDINGS.buttons[action]
+    // A stick direction (menu navigation) holds past navThreshold and lets go below
+    // navRelease, so it fires once per push.
+    const tilt = padButtons.has(action) ? navRelease : navThreshold
+    const down = pads.some(
+      (pad) =>
+        indices.some((i) => (pad.buttons[i]?.value ?? 0) > buttonThreshold) ||
+        stick.some(({ axis, sign }) => (pad.axes[axis] ?? 0) * sign > tilt),
     )
     if (down) buttons.add(action)
   }

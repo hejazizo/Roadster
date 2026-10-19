@@ -18,6 +18,7 @@ export type CarState = {
   height: number // m, wheels above the ground below
   verticalSpeed: number // m/s, positive up
   rollTurns: number // since leaving the ground, + left side up
+  roll: number // rad about the long axis from upright, + left side up (attitude indicator)
   landings: number // bumped on every landing
   landingKind: LandingKind // of the last one
   hits: number // parked cars clipped since the page loaded
@@ -40,6 +41,7 @@ export const useCarStore = create<CarState>(() => ({
   height: 0,
   verticalSpeed: 0,
   rollTurns: 0,
+  roll: 0,
   landings: 0,
   landingKind: 'wheels',
   hits: 0,

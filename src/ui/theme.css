@@ -32,16 +32,29 @@
   --ui-radius-sm: 4px;
   --ui-radius-md: 8px;
   --ui-radius-lg: 12px;
-  --ui-gutter: 20px;
+  --ui-gutter: 24px;
 
   --ui-font: 'Satoshi', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ui-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --ui-ease: 0.16s ease;
+  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-move: 0.32s var(--ui-ease-out); /* slides, pops, arc fills */
+
+  /* Focus ring for d-pad / keyboard menu navigation (menuNav.ts). */
+  --ui-focus: var(--ui-accent);
+  --ui-focus-ring: 0 0 0 2px var(--ui-bg), 0 0 0 4px var(--ui-focus);
+  --ui-glow: 0 0 10px color-mix(in srgb, var(--ui-accent) 70%, transparent);
+
+  /* Cards and the HUD's light panels. */
+  --ui-card: rgba(18, 28, 37, 0.86);
+  --ui-card-hover: rgba(30, 42, 52, 0.92);
+  --ui-glass: rgba(11, 17, 24, 0.5);
+  --ui-shadow-text: 0 2px 12px rgba(7, 11, 16, 0.6);
 }
 
 .ui-root {
   font-family: var(--ui-font);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.4;
   color: var(--ui-text);
   user-select: none;
@@ -56,7 +69,7 @@
 }
 
 .ui-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ui-text-faint);
 }
@@ -69,7 +82,7 @@
 .ui-unit {
   margin-left: 4px;
   font-family: var(--ui-font);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ui-text-faint);
 }
@@ -85,19 +98,71 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
   box-sizing: border-box;
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   background: rgba(255, 255, 255, 0.04);
   font-family: var(--ui-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1;
   color: var(--ui-text-muted);
   white-space: nowrap;
+}
+
+/* Wide caps: Shift, Space, Enter, Esc. */
+.ui-key.is-wide {
+  gap: 4px;
+  min-width: 40px;
+  padding: 0 9px;
+}
+
+.ui-key svg {
+  flex: none;
+}
+
+/* Gamepad buttons drawn in SVG (glyphs.tsx). */
+.ui-glyph {
+  flex: none;
+  overflow: visible;
+  vertical-align: middle;
+}
+
+.ui-glyph-line {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: var(--ui-text-muted);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-glyph-line.is-faint {
+  fill: none;
+  stroke: var(--ui-border-strong);
+}
+
+.ui-glyph-fill {
+  fill: var(--ui-text-muted);
+}
+
+.ui-glyph-fill.is-faint {
+  fill: var(--ui-border-strong);
+}
+
+.ui-glyph-text {
+  font-family: var(--ui-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  fill: var(--ui-text);
+}
+
+/* The d-pad focus ring, on any menu control. */
+.is-focused {
+  box-shadow: var(--ui-focus-ring);
+  transition: box-shadow var(--ui-ease);
 }
 
 /* Segmented radio group (level, mode, assists). */
@@ -113,13 +178,13 @@
 .ui-segment {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 9px 10px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: var(--ui-text-faint);
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -135,6 +200,123 @@
 .ui-segment.is-selected {
   background: var(--ui-surface-3);
   color: var(--ui-text);
+}
+
+/* A choice as a card (level, mode) with ‹ › and a dot per choice. */
+.ui-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-card);
+  backdrop-filter: blur(8px);
+  transition:
+    background var(--ui-ease),
+    border-color var(--ui-ease),
+    box-shadow var(--ui-ease);
+}
+
+.ui-card:hover {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-card-hover);
+}
+
+.ui-card-head,
+.ui-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.ui-card-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-card-title {
+  overflow: hidden;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: ui-card-in 0.28s var(--ui-ease-out);
+}
+
+.ui-card-description {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ui-text-faint);
+}
+
+.ui-card-arrow {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--ui-ease),
+    color var(--ui-ease);
+}
+
+.ui-card-arrow:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
+}
+
+.ui-card-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ui-card-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ui-card-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-border-strong);
+  transition:
+    width var(--ui-ease),
+    background var(--ui-ease);
+}
+
+.ui-card-dots span.is-current {
+  width: 18px;
+  border-radius: 3px;
+  background: var(--ui-accent);
+}
+
+@keyframes ui-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
 }
 
 /* Label, value and bar (fuel, fans, hold). */
@@ -179,7 +361,7 @@
 }
 
 .ui-stat-value {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ui-text);
   white-space: nowrap;
 }
@@ -194,7 +376,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--chip-color, var(--ui-text)) 14%, transparent);
   color: var(--chip-color, var(--ui-text));
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
@@ -225,8 +407,18 @@
   background: var(--dot-color, var(--ui-text-faint));
 }
 
-/* Animations that move things have fade-only versions next to them (Hud.css). */
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Animations that move things have fade-only versions next to them (Hud.css, Menus.css). */
 @media (prefers-reduced-motion: reduce) {
+  .ui-card-title {
+    animation-name: ui-fade-in;
+  }
+
   .ui-root *,
   .ui-root *::before,
   .ui-root *::after {

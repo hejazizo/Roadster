@@ -47,6 +47,7 @@ const COASTING = released()
 
 const quat = new Quaternion()
 const up = new Vector3()
+const left = new Vector3()
 const vel = new Vector3()
 
 type CarProps = {
@@ -188,12 +189,15 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets, headlights
     // plane, so it reads the same on a wall as on the floor.
     const body = ref.current
     let speed = 0
+    let rollAngle = 0
     if (body) {
       const r = body.rotation()
       const v = body.linvel()
       up.set(0, 1, 0).applyQuaternion(quat.set(r.x, r.y, r.z, r.w))
+      left.set(1, 0, 0).applyQuaternion(quat)
       vel.set(v.x, v.y, v.z)
       speed = vel.addScaledVector(up, -vel.dot(up)).length()
+      rollAngle = Math.atan2(left.y, up.y)
     }
     useCarStore.setState({
       speed,
@@ -210,6 +214,7 @@ export default function Car({ ref, visualRef, telemetry, spawn, jets, headlights
       height: t.height,
       verticalSpeed: t.verticalSpeed,
       rollTurns: t.rollTurns,
+      roll: rollAngle,
       landings: t.landings,
       landingKind: t.landingKind,
       hits: t.hits,

@@ -220,6 +220,8 @@ export const TUNING = {
     stickDeadzone: 0.15, // stick tilt (0–1) ignored around the centre
     triggerDeadzone: 0.05, // trigger travel (0–1) ignored at rest
     buttonThreshold: 0.5, // a gamepad button counts as down above this value
+    navThreshold: 0.6, // stick tilt (0–1) that counts as a menu up / down / left / right…
+    navRelease: 0.35, // …and lets go below this, so a resting stick doesn't repeat
   },
   race: {
     countdown: 3, // s from restart to go; the car is held until then
@@ -250,6 +252,10 @@ export const TUNING = {
     },
   },
   camera: {
+    // Main menu: the picture is drawn this many CSS pixels higher (a view offset, at most
+    // 40% of the screen), so the car shows above the menu's bottom bar; eased at this rate (1/s).
+    menuShift: 200,
+    menuShiftDamping: 3,
     chase: {
       distance: 7, // m behind the car at rest
       height: 2.5, // m above the car

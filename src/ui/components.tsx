@@ -1,24 +1,70 @@
+import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
-import { bindingLabel, type BindingRef } from '../config/bindings'
+import {
+  bindingSources,
+  sourceLabel,
+  type BindingRef,
+  type ButtonAction,
+  type Device,
+} from '../config/bindings'
 import { useInputStore } from '../state/inputStore'
 import type { Medal } from '../state/stuntRun'
+import { Glyph } from './glyphs'
 
-// Small building blocks shared by the menus and the HUD (styles in theme.css).
+// Small building blocks shared by the menus and the HUD (styles in theme.css). Menu
+// controls never take DOM focus (no tab stop, no focus on click), so Enter and Space keep
+// going to the input layer; `focused` draws the d-pad focus ring instead (menuNav.ts).
 
-// The keys or pad buttons bound to some actions on the last-used device, one cap each;
-// nothing when unbound.
-export function KeyCap({ refs }: { refs: BindingRef[] }) {
-  const device = useInputStore((s) => s.device)
-  const label = bindingLabel(refs, device)
-  if (!label) return null
+const noFocus = (e: { preventDefault: () => void }) => e.preventDefault()
+
+const focusClass = (focused?: boolean) => (focused ? ' is-focused' : '')
+
+// The keys or pad buttons bound to some actions, drawn as glyphs on the last-used device (or
+// the one given); nothing when unbound.
+export function KeyCap({ refs, device }: { refs: BindingRef[]; device?: Device }) {
+  const lastDevice = useInputStore((s) => s.device)
+  const sources = bindingSources(refs, device ?? lastDevice)
+  if (sources.length === 0) return null
   return (
-    <span className="ui-keys">
-      {label.split(' / ').map((part) => (
-        <kbd key={part} className="ui-key">
-          {part}
-        </kbd>
+    <span className="ui-keys" title={sources.map(sourceLabel).join(' / ')}>
+      {sources.map((source) => (
+        <Glyph key={JSON.stringify(source)} source={source} />
       ))}
     </span>
+  )
+}
+
+type MenuButtonProps = {
+  label: string
+  action?: ButtonAction // shown as the button's key hint
+  onClick: () => void
+  icon?: LucideIcon
+  primary?: boolean
+  focused?: boolean
+  className?: string
+}
+
+export function MenuButton({
+  label,
+  action,
+  onClick,
+  icon: Icon,
+  primary,
+  focused,
+  className,
+}: MenuButtonProps) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      className={`menu-button${primary ? ' is-primary' : ''}${focusClass(focused)}${className ? ` ${className}` : ''}`}
+      onMouseDown={noFocus}
+      onClick={onClick}
+    >
+      {Icon && <Icon className="menu-button-icon" size={16} strokeWidth={1.75} aria-hidden />}
+      <span className="menu-button-label">{label}</span>
+      {action && <KeyCap refs={[action]} />}
+    </button>
   )
 }
 
@@ -27,19 +73,20 @@ type SegmentedProps<T extends string> = {
   options: readonly { id: T; name: string }[]
   value: T
   onChange: (id: T) => void
+  focused?: boolean
 }
 
-// A radio group drawn as segments. Like every menu control it never takes focus (no tab
-// stop, no focus on click), so Enter and Space keep going to the menu's actions; the keyboard
-// and gamepad switch it with its own action.
+// A radio group drawn as segments; the keyboard and gamepad switch it with its own action,
+// or with left / right while it has the focus ring.
 export function Segmented<T extends string>({
   label,
   options,
   value,
   onChange,
+  focused,
 }: SegmentedProps<T>) {
   return (
-    <div className="ui-segments" role="radiogroup" aria-label={label}>
+    <div className={`ui-segments${focusClass(focused)}`} role="radiogroup" aria-label={label}>
       {options.map(({ id, name }) => (
         <button
           key={id}
@@ -48,13 +95,82 @@ export function Segmented<T extends string>({
           aria-checked={id === value}
           tabIndex={-1}
           className={`ui-segment${id === value ? ' is-selected' : ''}`}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={noFocus}
           onClick={() => onChange(id)}
         >
           {name}
         </button>
       ))}
     </div>
+  )
+}
+
+type ChoiceCardProps = {
+  label: string // small heading, e.g. "Level"
+  title: string
+  description: string
+  keys: BindingRef[] // the hotkey that cycles it
+  count: number // choices, drawn as dots
+  index: number
+  onStep?: (dir: 1 | -1) => void // without one the card is fixed (a single choice)
+  focused?: boolean
+  children?: ReactNode // extra lines under the description (best, medal)
+}
+
+// A menu choice as a card: its name and a line about it, with ‹ › to step through the
+// choices (left / right while focused, or its hotkey).
+export function ChoiceCard({
+  label,
+  title,
+  description,
+  keys,
+  count,
+  index,
+  onStep,
+  focused,
+  children,
+}: ChoiceCardProps) {
+  const arrow = (dir: 1 | -1, Icon: LucideIcon, name: string) =>
+    onStep && (
+      <button
+        type="button"
+        tabIndex={-1}
+        className="ui-card-arrow"
+        aria-label={`${name} ${label.toLowerCase()}`}
+        onMouseDown={noFocus}
+        onClick={() => onStep(dir)}
+      >
+        <Icon size={16} strokeWidth={2} aria-hidden />
+      </button>
+    )
+  return (
+    <section className={`ui-card${focusClass(focused)}`} aria-label={label}>
+      <header className="ui-card-head">
+        <span className="ui-label">{label}</span>
+        {onStep && <KeyCap refs={keys} />}
+      </header>
+      <div className="ui-card-body">
+        {arrow(-1, ChevronLeft, 'Previous')}
+        <div className="ui-card-main">
+          {/* Keyed so each change replays the entrance. */}
+          <div key={title} className="ui-card-title">
+            {title}
+          </div>
+          <div className="ui-card-description">{description}</div>
+        </div>
+        {arrow(1, ChevronRight, 'Next')}
+      </div>
+      <footer className="ui-card-foot">
+        <div className="ui-card-extra">{children}</div>
+        {count > 1 && (
+          <span className="ui-card-dots" aria-hidden>
+            {Array.from({ length: count }, (_, i) => (
+              <span key={i} className={i === index ? 'is-current' : undefined} />
+            ))}
+          </span>
+        )}
+      </footer>
+    </section>
   )
 }
 
@@ -123,5 +239,34 @@ export function Section({
       </div>
       {children}
     </section>
+  )
+}
+
+// A centred dialog over a menu screen (settings, controls), with its own focus (menuNav.ts).
+export function Sheet({
+  title,
+  aside,
+  wide,
+  children,
+}: {
+  title: string
+  aside?: ReactNode
+  wide?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div className="menu-overlay is-dim is-sheet ui-root">
+      <div
+        className={`menu-dialog ui-panel${wide ? ' is-xwide' : ''}`}
+        role="dialog"
+        aria-label={title}
+      >
+        <header className="menu-dialog-head">
+          <h2 className="menu-heading">{title}</h2>
+          {aside}
+        </header>
+        {children}
+      </div>
+    </div>
   )
 }

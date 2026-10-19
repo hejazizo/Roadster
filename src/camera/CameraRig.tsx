@@ -5,6 +5,7 @@ import { Vector3, type Object3D } from 'three'
 import { onPress } from '../input/input'
 import type { CarTelemetry } from '../car/telemetry'
 import ChaseCam from './ChaseCam'
+import MenuFraming from './MenuFraming'
 
 type CameraRigProps = {
   target: RefObject<Object3D | null>
@@ -28,5 +29,10 @@ export default function CameraRig({ target, body, telemetry }: CameraRigProps) {
   )
 
   if (orbitTarget) return <OrbitControls target={orbitTarget} />
-  return <ChaseCam target={target} body={body} telemetry={telemetry} />
+  return (
+    <>
+      <ChaseCam target={target} body={body} telemetry={telemetry} />
+      <MenuFraming />
+    </>
+  )
 }

@@ -40,7 +40,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☑      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☑      |
 | 16.7 | Interface redesign             | 3 · Details | ☑      |
-| 16.8 | Gauge HUD & menu polish        | 3 · Details | ☐      |
+| 16.8 | Gauge HUD & menu polish        | 3 · Details | ☑      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
 | 19   | Release polish                 | 3 · Details | ☐      |
@@ -687,6 +687,42 @@ M16.7 gave the overlay a consistent look, but it still reads as a dashboard of c
 
 **Done when:** the speed shows on a round gauge that reads at a glance, the main menu, controls, pause and results look like one polished modern game UI, everything works by keyboard, pad (including d-pad navigation) and mouse, and `dev`, `build` and `lint` pass.
 
+✅ **Done:** a round SVG speedometer bottom-right, a lighter run HUD with motion, a bottom-bar main menu, a grouped controls reference with drawn key and pad glyphs, animated results, and d-pad / stick / arrow navigation with a focus ring. Mid-milestone changes asked for in the session: everything sized up, the Test Track taken out of the game, and the jets moved to Space / A.
+
+- **Gauge** (`src/ui/Speedometer.tsx`):
+  - a 270° dial from 0 to the boost top speed rounded up (180 km/h), ticks every 10 km/h, labels every 40, and the boost zone from the engine's top speed tinted coral;
+  - an animation frame loop eases the arc, the digits and the fuel and fans arcs (no React render per frame); the arc glows coral while boosting;
+  - fuel is an outer arc with a % readout (amber while draining, coral when empty), the fans' suction an inner violet arc that fades in;
+  - the status (and holds, jets) shows under the dial;
+  - it is `clamp(260px, 40vh, 360px)` across and scales everything inside.
+- **Air readout** beside the gauge while airborne: Height, Vertical and Roll turns, plus an attitude disc (rear-view car against the horizon) from a new display-only `carStore.roll`, the absolute roll angle (`rollTurns` resets at take-off, so leaving the loop's lip inverted would read upright). It slides in and out.
+- **Run HUD:** the timer (48 px) and rings or points sit on no panel and pop on a change, and points count up. The step track's done steps pop, the current one sweeps (or fills with the inverted hold), and each new step's text slides in. Popups slide in from the right and out to the left. The countdown has a ring that runs down each second.
+- **Main menu:**
+  - a top bar with the wordmark, the level ("Proving Ground · …") and Settings / Controls buttons;
+  - bottom-left, the mode card (name, description, best and medal) over a big coral Play;
+  - bottom-right, the car group (paint, assists).
+  - Fits with no scrolling at 1280 × 720 and nothing cut off at 960 × 540.
+  - On the menu the picture is drawn up to 200 px higher (`camera/MenuFraming.tsx`, a view offset eased by `TUNING.camera.menuShift`), so the car shows above the bar.
+- **Sheets** for Settings (mute, three volumes stepped 10 % by left / right) and Controls (Drive, Air, Stunts, Race in a 2 × 2 grid, with a Keyboard / Gamepad switch that follows the last-used device). Both open from the main and pause menus and close with back or pause.
+- **Glyphs** (`src/ui/glyphs.tsx`): key caps with arrow icons and wide caps, and pad buttons drawn in SVG (face buttons with their position, bumpers, triggers, View / Menu, d-pad arms, sticks). Every `KeyCap` uses them.
+- **Navigation** (`src/ui/menuNav.ts`):
+  - a virtual focus, so nothing takes DOM focus;
+  - new `up` / `down` actions (↑ / W, ↓ / S, d-pad, left stick), and the left stick also drives `prev` / `next`, with hysteresis (`TUNING.input.navThreshold` / `navRelease`);
+  - focus starts on what confirm did before (Play, Restart, Retry), so Enter and A behave as in M16.7, and the ring shows from the first up or down;
+  - left / right adjust the focused item, otherwise they cycle the paint as before.
+- **Results:** the score or time counts up (`src/ui/motion.ts`), then the breakdown lines come in one by one, then the medal and "New best". Under reduced motion it is fade-only with the numbers at once.
+- **Sizes:** the base text is 16 px, and the key caps, cards, Play, the sheets and the results' 64 px total are all larger than in M16.7. The results compact themselves below 600 px tall.
+- **Test Track out of the game:** `LEVELS` is the Proving Ground only, the level card and its `level` action (L / RB) are gone, and an old saved level falls back to the Proving Ground. `testLevel.ts` stays as the sim's handling test ground.
+- **Jets on Space / A, hop and glide on G / RB.** The jets carry three of the reveal steps; hop and glide were for the Test Track's gaps.
+
+Checked in headless Chrome (CDP, dev server), with a stubbed gamepad for pad-only navigation, at 1440 × 900, 1280 × 720 and 960 × 540 (no element off-screen):
+
+- the main menu, both sheets, a run (boost, fans, a jets lift-off and roll), the objective with popups, the pause menu, and both results screens (the reveal results with reduced motion too);
+- keyboard and pad navigation through every menu and sheet;
+- no console errors.
+
+Sim (`npm run sim:car`): output identical to M16.7, byte for byte. `lint`, `build` and `format:check` pass. Bundle: `index` +4.8 kB gzip, CSS +2 kB gzip (`docs/performance.md`).
+
 ### M17 — More levels & game modes
 
 - 2–4 more levels.
@@ -728,21 +764,23 @@ Park later ideas here instead of building them early.
 - The circuit road is visual only; give it a collider/surface type if road vs. grass grip matters. Grip is per tyre now (`handling.ts`), so a surface factor would multiply into it (M16.6 kept it visual: M17, with surface types).
 - Ring course: a direction arrow or minimap pointing at the next ring, per-ring split times, and multi-lap races (M17 modes).
 - The finish arch sits right ahead of spawn, so the last leg loops back around to pass through it; consider moving spawn or the arch when the level gets real art (the Test Track stays greybox, so M17).
-- Gamepad: d-pad / stick focus navigation in menus (needed once menus have more than a few buttons) and a fallback for pads without the "standard" mapping (indices are assumed standard). Key remapping UI is M19; bindings are already data. Rumble (M13) has no on/off setting yet — M18 settings.
+- Gamepad: a fallback for pads without the "standard" mapping (menus have d-pad / stick focus navigation since M16.8) (indices are assumed standard). Key remapping UI is M19; bindings are already data. Rumble (M13) has no on/off setting yet — M18 settings.
 - Holding W and S together now cancels to the idle brake (before, W won); same for both triggers.
 - The hero body (4.27 m) is centred on the wheelbase, not on its own length, so the nose sticks ~0.15 m past the 4.2 m collider and its lower body (bumpers, sills) hangs below the collider's bottom, as the placeholder's did. On steep kickers the nose can visually dip into the ramp, and the collider's top front corner sits in the air above the sloping hood. Fine for now; revisit if it shows in play — the half-loop (M16.2) is the likely place.
 - The car is 139k triangles drawn twice (once for the shadow map) and `car.glb` is 1.2 MB gzipped, half the first load and almost all of it geometry. Options: a decimated shadow-only copy, a lower-poly LOD for low settings, more aggressive simplification — M18.
 - The front arch liners are flat dark geometry and the wheel arches have no real inner detail. M12 flattened the baked lighting in the paint (shade map) but glass, trim and wheels still carry it, and the simplified body's shading normals are lumpy, so the clearcoat shows small creases and glints near panel edges. A cleaner model or a normal-map bake would fix both (M19 if it matters).
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
 - The Test Track's sky HDRI is only used for lighting and reflections; its background is still the flat sky colour. M16.6 gave the Proving Ground a shader night sky as background and environment instead; the Test Track can get the same treatment when it gets art (M17). The HDRI's sun is within 5° of `SUN_OFFSET`; keep them together.
-- The main menu is a left sidebar since M16.7, so the car shows beside it; a garage/showroom view (camera orbiting the car beside the menu) would show paints off better — M17 with the level select, or M19.
-- UI (M16.7): the HUD is still mouse-transparent and the menus have no d-pad focus navigation (see the gamepad note; planned for M16.8); the fonts come from Fontshare at runtime, so an offline build falls back to system-ui; the results dialog doesn't animate its numbers (M16.8); touch layouts are M18.
+- The main menu is a bottom bar since M16.8, with the picture shifted up so the car shows above it; a garage/showroom view (camera orbiting the car) would show paints off better — M17 with the level select (it comes back with more levels), or M19.
+- UI (M16.7, M16.8): the HUD is mouse-transparent; the fonts come from Fontshare at runtime, so an offline build falls back to system-ui; touch layouts are M18. Menu navigation is a straight list with wrap-around (up / down), not spatial, so on the main menu down from Play goes to the paint on the right; a spatial focus (left / right between columns) would read better, but left / right already adjust the focused item.
+- The Test Track is out of the game since M16.8 (only `testLevel.ts` is left, for the sim), so the sky HDRI is never fetched now and the notes about its arch, greybox shading and sky wait for a day level (M17).
+- Hop and glide (G / RB since M16.8) have no job on the Proving Ground: the jets lift off and brake falls, and glide was for the Test Track's 80 m gap. Removing them would touch the car's abilities, fuel drain, the HUD's Gliding status and the sim's gap and void-ring checks; playtest first, since glide is the only fuel-light way to soften a long fall.
 - Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); the Test Track still looks like this (M17 art).
 - `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
 - Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); M16.6 only tints dust and smoke per level (grey at night). Per-surface colours and grip belong with surface types (M17). Marks are drawn on any ground the wheels touch, including ramps.
 - The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.
-- Volume can only be set with the mouse (sliders) or muted with M; keyboard and gamepad navigation of the sliders belongs to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
+- Volume is set in the Settings sheet (mouse, or left / right on a focused slider in 10 % steps since M16.8) or muted with M; finer steps and the other settings belong to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
 - Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with surface types (M17). Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
 - The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M19).
 - Handling (M15) was tuned with the headless sim (`npm run sim:car`) plus a short playtest. The sim's drivers are crude (a P-controller on slide angle), so its numbers say "can be caught" or "can be held", not how it feels. Re-run it after level or tuning changes (M16.x/M17), since the void ring and the 80 m gap are sized to the glide.
