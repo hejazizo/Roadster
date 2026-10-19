@@ -42,3 +42,6 @@ npm-debug.log*
 Thumbs.db
 ehthumbs.db
 desktop.ini
+
+# Raw audio downloaded by scripts/build-audio.ts
+assets/audio/cache/

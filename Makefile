@@ -1,4 +1,4 @@
-.PHONY: dev down build lint format car-model fleet-models sim shell clean
+.PHONY: dev down build lint format car-model fleet-models audio sim shell clean
 
 # Build the image and start the dev server on http://localhost:5173
 dev:
@@ -23,6 +23,11 @@ car-model:
 # Rebuild public/models/fleet/*.glb (the Proving Ground's parked cars)
 fleet-models:
 	docker compose run --rm web npm run model:fleet
+
+# Rebuild public/audio/drivetrain/*.mp3 from the CC0 recordings (assets/audio/LICENSE.txt);
+# ffmpeg goes into a throwaway container, so the dev image stays slim
+audio:
+	docker compose run --rm web bash -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg > /dev/null && npm run audio:build"
 
 # Headless handling sim: driving, jump, ring and half-loop checks on both levels
 sim:

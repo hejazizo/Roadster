@@ -1,0 +1,31 @@
+Drivetrain sound sources (public/audio/drivetrain/*.mp3)
+========================================================
+
+The car's drivetrain loops are cut from two recordings of real electric cars on Freesound,
+both released under CC0 1.0 (public domain dedication,
+https://creativecommons.org/publicdomain/zero/1.0/). No credit is required; they are credited
+here and in src/config/assets.ts anyway.
+
+The raw recordings are not in this repository. scripts/build-audio.ts downloads Freesound's
+public HQ previews of them into assets/audio/cache/ (git-ignored) and builds the loops from
+those. tferrino asks that the raw files not be redistributed as they are, so only the
+processed loops are committed.
+
+1. "electric car - bmw i3 - driving - M+S 48k24b.WAV" by tferrino
+   https://freesound.org/people/tferrino/sounds/405285/  (CC0 1.0)
+   Mid channel only. Used for:
+   - off-mid.mp3   14.0–16.5 s, high-passed at 250 Hz (cruising, motor tone at ~1155 Hz)
+   - off-high.mp3  82.5–85.5 s, high-passed at 250 Hz (cruising, motor tone at ~1585 Hz)
+   - rumble.mp3    86.0–89.0 s, low-passed at 350 Hz (road and tyre noise)
+
+2. "Acceleration of an electric car" (Tesla Model S Plaid, full throttle) by justVova
+   https://freesound.org/people/justVova/sounds/761685/  (CC0 1.0)
+   Left and right mixed to mono. Each stretch has its pitch flattened along the motor tone
+   (about 64 Hz per m/s), so it holds one note. Used for:
+   - on-low.mp3    0.35–1.15 s, high-passed at 250 Hz
+   - on-mid.mp3    1.55–2.38 s, high-passed at 250 Hz
+   - on-high.mp3   2.40–4.35 s, high-passed at 250 Hz
+   - surge.mp3     2.40–4.35 s, high-passed at 900 Hz (boost's power surge)
+
+Every loop is crossfaded tail-into-head, normalised to -20 dBFS RMS and encoded as mono
+96 kbps MP3. The exact recipe is the LAYERS table in scripts/build-audio.ts.

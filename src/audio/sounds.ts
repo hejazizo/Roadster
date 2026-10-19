@@ -10,6 +10,14 @@ function play(sound: (a: AudioGraph, out: AudioNode, now: number) => void) {
   if (a) sound(a, a.sfx, a.ctx.currentTime)
 }
 
+// Landing on the wheels: the front axle bottoms out, then the rear a beat later and softer.
+const LANDING_AXLES = [
+  { delay: 0, level: 1 },
+  { delay: 0.075, level: 0.7 },
+]
+// Body panel resonances (Hz) in a landing's clunk; inharmonic, so they ring as sheet metal.
+const PANEL_MODES = [830, 1370, 2240]
+
 // Major pentatonic steps, so successive rings climb a tune.
 const PENTATONIC = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]
 
@@ -63,17 +71,61 @@ export const sfx = {
       })
     }),
 
-  // A thump that grows deeper, longer and louder with the impact (0–1).
-  landing: (impact: number) =>
+  // A heavy car coming down, louder and longer with the impact (0–1). On the wheels: the
+  // suspension bottoms out front then rear, each a dull thud with almost no pitch drop (a
+  // falling pitch reads as a bouncing ball), over a clunk of body panels and a short rattle.
+  // On the roof or side (`bad`): one heavier body hit with more metal in it.
+  landing: (impact: number, bad = false) =>
     play((a, out, at) => {
       const k = (0.35 + 0.65 * impact) * mix.oneShots
-      tone(a, out, { at, freq: 110, freqEnd: 38, decay: 0.25 + 0.25 * impact, gain: 0.9 * k })
+      const axles = bad ? [{ delay: 0, level: 1 }] : LANDING_AXLES
+      for (const { delay, level } of axles) {
+        const t = at + delay
+        noise(a, out, {
+          at: t,
+          attack: 0.003,
+          decay: 0.1 + 0.12 * impact,
+          gain: 2.5 * k * level,
+          filter: { type: 'lowpass', freq: 260, freqEnd: 140, Q: 0.8 },
+        })
+        tone(a, out, {
+          at: t,
+          freq: 62,
+          freqEnd: 54,
+          attack: 0.004,
+          decay: 0.09 + 0.09 * impact,
+          gain: 0.8 * k * level,
+        })
+      }
+      // Body clunk: a knock of mid noise and a few short inharmonic panel modes.
+      const metal = bad ? 1.6 : 1
       noise(a, out, {
         at,
-        decay: 0.18 + 0.2 * impact,
-        gain: 0.5 * k,
-        filter: { type: 'lowpass', freq: 900, freqEnd: 200 },
+        attack: 0.002,
+        decay: bad ? 0.16 : 0.08,
+        gain: 0.6 * k * metal,
+        filter: { type: 'bandpass', freq: 480, Q: 1.4 },
       })
+      PANEL_MODES.forEach((freq, i) => {
+        tone(a, out, {
+          at: at + 0.003 * i,
+          type: 'triangle',
+          freq,
+          attack: 0.001,
+          decay: 0.04 + 0.02 * i,
+          gain: 0.05 * k * metal * (0.4 + impact),
+        })
+      })
+      // Rattle: a few small clicks dying away as the body settles.
+      for (let i = 0; i < 4; i++) {
+        noise(a, out, {
+          at: at + 0.035 + 0.04 * i + Math.random() * 0.015,
+          attack: 0.001,
+          decay: 0.018,
+          gain: 0.25 * k * (1 - i / 4) * (0.3 + impact),
+          filter: { type: 'bandpass', freq: 2200 + Math.random() * 2400, Q: 3 },
+        })
+      }
     }),
 
   // Clipping a parked car: a dull body thud with a metallic clank on top, louder with impact.

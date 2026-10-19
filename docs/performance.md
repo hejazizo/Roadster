@@ -61,18 +61,19 @@ None of the art casts a shadow. Lighting is the moon (the one shadow caster), th
 
 `npm run build`, Vite 8 (Rolldown). Vendor code is split out (`vite.config.ts`), so a game change only re-downloads `index`.
 
-| Chunk         | Raw     | Gzip    | Notes                                                                                                                                              |
-| ------------- | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                                                             |
-| `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip)                                       |
-| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                                                        |
-| `index`       | 148 kB  | 53 kB   | the game (M14 audio +4 kB gzip; M16.7 UI with lucide icons +3 kB gzip; M16.6 night art +11 kB gzip; M16.8 gauge, sheets, glyphs, nav +4.8 kB gzip) |
-| `index.css`   | 29 kB   | 6.4 kB  | overlay styles (M16.7 redesign +2.4 kB gzip, M16.8 +2 kB gzip)                                                                                     |
-| fonts         | 111 kB  | 111 kB  | M16.7: IBM Plex Mono 400/500 latin woff2, bundled (2 × 15 kB); Satoshi 400/500/700 from Fontshare (3 × 27 kB)                                      |
-| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                                                                 |
-| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures                                        |
-| `fleet/*.glb` | 62 kB   | 30 kB   | `public/models/fleet/` (M16.4 parked cars, 9–21 kB each), Meshopt geometry, preloaded at startup                                                   |
-| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), day levels only since M16.6, doesn't block startup (own Suspense)                                          |
+| Chunk         | Raw     | Gzip    | Notes                                                                                                                                                                             |
+| ------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rapier`      | 2.24 MB | 842 kB  | Rapier with its WASM inlined as base64                                                                                                                                            |
+| `three`       | 1.19 MB | 326 kB  | three, R3F, drei, postprocessing and helpers (M12 `<Environment>` + HDR loader +18 kB, M13 post +25 kB gzip)                                                                      |
+| `react`       | 207 kB  | 64 kB   | react, react-dom, scheduler                                                                                                                                                       |
+| `index`       | 152 kB  | 55 kB   | the game (M14 audio +4 kB gzip; M16.7 UI with lucide icons +3 kB gzip; M16.6 night art +11 kB gzip; M16.8 gauge, sheets, glyphs, nav +4.8 kB gzip; M16.9 drivetrain +1.6 kB gzip) |
+| `index.css`   | 29 kB   | 6.4 kB  | overlay styles (M16.7 redesign +2.4 kB gzip, M16.8 +2 kB gzip)                                                                                                                    |
+| fonts         | 111 kB  | 111 kB  | M16.7: IBM Plex Mono 400/500 latin woff2, bundled (2 × 15 kB); Satoshi 400/500/700 from Fontshare (3 × 27 kB)                                                                     |
+| `TuningPanel` | 209 kB  | 71 kB   | leva, loaded only the first time ` opens the panel                                                                                                                                |
+| `car.glb`     | 1.76 MB | 1.42 MB | `public/models/car.glb` (hero car, M12 materials), fetched once at startup: Meshopt geometry, WebP textures                                                                       |
+| `fleet/*.glb` | 62 kB   | 30 kB   | `public/models/fleet/` (M16.4 parked cars, 9–21 kB each), Meshopt geometry, preloaded at startup                                                                                  |
+| drivetrain    | 173 kB  | 173 kB  | `public/audio/drivetrain/*.mp3` (M16.9, 7 mono loops, 11–36 kB each), fetched after the first click or key press, outside the first load                                          |
+| sky HDRI      | 1.44 MB | 954 kB  | `public/hdri/…_1k.hdr` (1024×512 RGBE), day levels only since M16.6, doesn't block startup (own Suspense)                                                                         |
 
 The first load is about 3.6 MB gzipped (M13 added ~30 kB, M16.7's UI redesign ~120 kB, almost all fonts): Rapier 842 kB, the car 1.42 MB, the sky 954 kB. Since M16.6 the night sky is generated in code, so the sky HDRI is only fetched for a day level; since M16.8 the Test Track is out of the game, so it isn't fetched at all and the first load is about 2.7 MB. The car is already Meshopt-compressed, so gzip barely helps; of its textures the 2048² atlas is 86 kB, the paint shade map 125 kB and the carbon weave 0.5 kB, the rest is geometry. M12 added 210 kB to the car: the shade map, and the extra vertices along the new material seams. At M10, with the 184 kB placeholder car and no HDRI, the first load was 1.2 MB; at M11 2.4 MB.
 

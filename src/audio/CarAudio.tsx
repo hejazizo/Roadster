@@ -8,6 +8,7 @@ import { TUNING } from '../config/tuning'
 import type { JetLevels } from '../vfx/jets'
 import { useAudioStore } from '../state/audioStore'
 import { getAudio, type AudioGraph } from './audio'
+import { createDrivetrain, loadDrivetrain, type Drivetrain } from './drivetrain'
 import { gainInto, noiseSource } from './synth'
 import { sfx } from './sounds'
 
@@ -35,8 +36,9 @@ type Voices = {
   stop: () => void
 }
 
-// The car's continuous sounds, all on the car bus (which fades out while paused):
-// motor and inverter whine following the speed, thruster roar following the flames, wind
+// The car's continuous sounds, all on the car bus (which fades out while paused): the
+// recorded drivetrain (src/audio/drivetrain.ts) or, until it loads or if it fails, a synth
+// motor and inverter whine following the speed; thruster roar following the flames, wind
 // growing with speed, tyre squeal from sliding wheels, the fans' whine with suction and the
 // cold-gas jets' hiss.
 function createVoices(a: AudioGraph): Voices {
@@ -133,6 +135,7 @@ type CarAudioProps = {
 export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities }: CarAudioProps) {
   const started = useAudioStore((s) => s.started)
   const voices = useRef<Voices | null>(null)
+  const drivetrain = useRef<{ d: Drivetrain; readyAt: number } | null>(null)
   // Last-seen state, to play one-shots on changes.
   const seen = useRef({
     boosting: false,
@@ -148,20 +151,32 @@ export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities
     if (!started || !a) return
     const v = createVoices(a)
     voices.current = v
+    // The recordings load after the first gesture, so they never hold up the menu; the synth
+    // motor plays until they're decoded.
+    let live = true
+    void loadDrivetrain(a).then((buffers) => {
+      if (!live || !buffers) return
+      const d = createDrivetrain(a, buffers)
+      drivetrain.current = { d, readyAt: a.ctx.currentTime }
+      if (import.meta.env.DEV) Object.assign(window, { __drivetrain: d })
+    })
     return () => {
+      live = false
       voices.current = null
       v.stop()
+      drivetrain.current?.d.stop()
+      drivetrain.current = null
     }
   }, [started])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const t = telemetry.current
     const { boosting, lifting, hops } = abilities.current
     const s = seen.current
     if (boosting && !s.boosting) sfx.boostBurst()
     if (lifting && !s.lifting) sfx.jetBurst()
     if (hops !== s.hops) sfx.hop()
-    if (t.landings !== s.landings) sfx.landing(t.landingImpact)
+    if (t.landings !== s.landings) sfx.landing(t.landingImpact, t.landingKind === 'bad')
     if (t.respawns !== s.respawns) sfx.respawn()
     if (t.hits !== s.hits) sfx.hit(t.hitImpact)
     s.boosting = boosting
@@ -178,7 +193,24 @@ export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities
     const set = (param: AudioParam, value: number) => param.setTargetAtTime(value, now, FOLLOW)
     const { mix, motor, wind, skid, fan } = TUNING.audio
 
-    // Motor: pitch with speed, louder and brighter under throttle.
+    // The recorded drivetrain, once loaded; the synth motor fades out under it.
+    const dt = drivetrain.current
+    let synth = 1
+    if (dt) {
+      synth = MathUtils.clamp(1 - (now - dt.readyAt) / TUNING.audio.drivetrain.fadeIn, 0, 1)
+      let contact = 0
+      for (const w of t.wheels) if (w.contact) contact++
+      dt.d.update({
+        speed: t.speed,
+        throttle: t.throttle,
+        braking: t.braking,
+        contact: contact / t.wheels.length,
+        thrust: thrust.current,
+        dt: delta,
+      })
+    }
+
+    // Synth motor: pitch with speed, louder and brighter under throttle.
     const speedFrac = MathUtils.clamp(Math.abs(t.speed) / motor.topSpeed, 0, 1)
     const pitch = MathUtils.lerp(motor.idlePitch, motor.topPitch, speedFrac)
     const load = Math.abs(t.throttle) * motor.load
@@ -186,9 +218,9 @@ export default function CarAudio({ body, telemetry, thrust, jetLevels, abilities
     set(v.motorPitch[1], pitch * DETUNE_RATIO)
     set(v.motorFilter.frequency, pitch * (3 + 6 * load))
     const motorLevel = MathUtils.lerp(motor.idleLevel, 1, speedFrac) * (1 + load)
-    set(v.motor.gain, (mix.motor * motorLevel) / (1 + motor.load))
+    set(v.motor.gain, (synth * mix.motor * motorLevel) / (1 + motor.load))
     set(v.whinePitch, pitch * WHINE_RATIO)
-    set(v.whine.gain, mix.whine * speedFrac * (0.5 + load))
+    set(v.whine.gain, synth * mix.whine * speedFrac * (0.5 + load))
 
     const power = thrust.current
     set(v.thruster.gain, mix.thruster * power)

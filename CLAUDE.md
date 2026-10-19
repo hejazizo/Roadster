@@ -15,6 +15,7 @@ Docker (only Docker needed on the host):
 - `make lint` / `make build` / `make format` — run the npm scripts in a container
 - `make shell` — bash inside the container; `make clean` — remove image and volumes
 - `make car-model` — rebuild `public/models/car.glb` from the source model (see `docs/car-model-spec.md`)
+- `make audio` — rebuild `public/audio/drivetrain/*.mp3`, the car's recorded drivetrain loops, from CC0 recordings (`scripts/build-audio.ts`, sources in `assets/audio/LICENSE.txt`)
 - `make fleet-models` — rebuild `public/models/fleet/*.glb`, the Proving Ground's parked cars, built in code from `src/scene/fleetData.ts`
 - `make sim` — headless handling sim (`scripts/sim-car.ts`): runs the car's own step code in Rapier and checks driving, drifts, jumps, ring reachability, the jets and air roll, the half-loop (with and without fans, and the drop off its lip), the fleet jump (kickflip, hits) and the reveal run's steps and scoring (`src/state/stuntRun.ts`) for each assist mode on the Proving Ground and on the Test Track (`testLevel.ts`, no longer in the game, kept as the sim's handling test ground); run it after changing car tuning or a level
 
@@ -30,6 +31,7 @@ Local Node (alternative):
 - `npm run format` / `npm run format:check` — Prettier
 - `npm run model:car` — rebuild the car GLB
 - `npm run model:fleet` — rebuild the fleet GLBs
+- `npm run audio:build` — rebuild the drivetrain loops (needs `ffmpeg` on PATH)
 - `npm run sim:car` — handling sim (add assist modes and/or level ids to run only those, e.g. `npm run sim:car beginner proving`)
 
 ## Folders (`src/`)
@@ -39,13 +41,13 @@ Local Node (alternative):
 - `car/` — car physics and controls
 - `camera/` — chase / debug cameras, and `MenuFraming.tsx` (the main menu's view offset that lifts the car above the bottom bar)
 - `vfx/` — visual effects: thruster flames, particles, tire marks, the speed blur effect
-- `audio/` — synthesized sound and music (Web Audio API, no files); starts on the first click or key press
+- `audio/` — sound and music (Web Audio API), starting on the first click or key press; all synthesized except the car's drivetrain (`drivetrain.ts`), which plays recorded EV loops from `public/audio/drivetrain/` fetched after that first gesture, with the synth motor as the fallback
 - `input/` — input layer: keyboard and gamepads mapped to actions
 - `ui/` — HTML overlay (HUD, menus); colours, fonts and base classes are tokens in `theme.css`, shared pieces (key caps, segmented pickers, choice cards, sheets, meters) in `components.tsx`, key and pad glyphs in `glyphs.tsx`, the round speed gauge in `Speedometer.tsx`. Menus use a virtual focus (`menuNav.ts`: d-pad / stick / arrows move a focus ring, nothing takes DOM focus) and `motion.ts` for count-ups; anything that moves has a fade-only version under `prefers-reduced-motion`
 - `state/` — Zustand stores
 - `config/` — `tuning.ts`, `bindings.ts` and other config
 
-Outside `src/`: `public/models/` holds the runtime GLBs, `public/hdri/` the sky HDRI, `assets/` the source models they're built from, `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain) and `performance.md` (the FPS / draw-call baseline).
+Outside `src/`: `public/models/` holds the runtime GLBs, `public/hdri/` the sky HDRI, `public/audio/` the drivetrain loops, `assets/` the source models they're built from (and the audio sources' licence; the raw recordings are downloaded, not committed), `scripts/` the build scripts and `docs/` specs such as `car-model-spec.md` (what a car GLB must contain) and `performance.md` (the FPS / draw-call baseline).
 
 ## Rules
 

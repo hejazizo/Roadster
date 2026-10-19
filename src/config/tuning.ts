@@ -329,12 +329,18 @@ export const TUNING = {
       vignette: 0.45, // darkness
     },
   },
-  // Synthesized sound (src/audio). Levels are linear gains before the player's volume
-  // settings; how each sound is built (waveforms, envelopes) lives with it in src/audio.
+  // Sound (src/audio): synthesized, apart from the recorded drivetrain loops. Levels are
+  // linear gains before the player's volume settings; how each sound is built (waveforms,
+  // envelopes, loops) lives with it in src/audio.
   audio: {
     mix: {
-      motor: 0.35,
-      whine: 0.06, // thin high inverter whine on top of the motor
+      drivetrain: 0.9, // recorded motor bands
+      gearWhine: 0.05,
+      regen: 0.06,
+      rumble: 0.5, // road and tyre noise
+      surge: 0.35, // boost's power surge over the motor
+      motor: 0.35, // synth motor, until the recordings load or if they fail
+      whine: 0.06, // thin high inverter whine on top of the synth motor
       thruster: 0.5,
       wind: 0.25,
       skid: 0.3,
@@ -345,6 +351,34 @@ export const TUNING = {
       ui: 0.4,
       music: 0.5,
     },
+    // Recorded drivetrain (src/audio/drivetrain.ts). Motor speed picks a band: equal-power
+    // crossfades between neighbouring band speeds, and each band's loop is played at
+    // motor speed / the speed it was recorded at, within minRate–maxRate.
+    drivetrain: {
+      lowSpeed: 6, // m/s, centre of the pulling-away band
+      midSpeed: 17, // m/s, cruising
+      highSpeed: 30, // m/s, flat out
+      minRate: 0.3, // playback rate floor, so the motor never stops at rest
+      maxRate: 1.7,
+      idleLevel: 0.12, // motor level at rest, as a fraction of the level at speed
+      levelSpeed: 12, // m/s where the motor reaches full level
+      loadLevel: 0.6, // extra motor level at full throttle
+      darkCutoff: 1400, // Hz, low-pass on the motor when coasting
+      brightCutoff: 9000, // Hz at full throttle
+      loadFollow: 0.12, // s, time constant of the off-load ↔ on-load crossfade
+      regenMinSpeed: 3, // m/s, below this lifting off brings in no regen
+      regenLift: 0.5, // regen level when lifting off, as a fraction of braking's
+      gearOrder: 96, // gear whine, Hz per m/s of road speed
+      regenOrder: 64, // regen tone, Hz per m/s (the recorded motor tone's order)
+      rumbleMinRate: 0.75, // road noise playback rate at rest
+      rumbleMaxRate: 1.3, // and flat out
+      airRevSpeed: 42, // m/s the unloaded motor spins up to in the air at full throttle
+      airRevRate: 1.2, // s, time constant of the spin-up in the air
+      landingDrop: 0.25, // s, time constant of the drop back to wheel speed on landing
+      surgeRate: 1.15, // surge layer's pitch over the motor's
+      fadeIn: 0.6, // s, crossfade from the synth motor once the recordings load
+    },
+    // Synth motor (M14), the fallback for the recordings.
     motor: {
       idlePitch: 70, // Hz at rest
       topPitch: 420, // Hz at topSpeed

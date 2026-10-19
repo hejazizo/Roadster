@@ -41,7 +41,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.6 | Reveal: night facility art     | 3 · Details | ☑      |
 | 16.7 | Interface redesign             | 3 · Details | ☑      |
 | 16.8 | Gauge HUD & menu polish        | 3 · Details | ☑      |
-| 16.9 | Electric drivetrain sound      | 3 · Details | ☐      |
+| 16.9 | Electric drivetrain sound      | 3 · Details | ☑      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
 | 19   | Release polish                 | 3 · Details | ☐      |
@@ -754,6 +754,27 @@ M14's motor is a synth stand-in: two detuned saws and a sine pitched by speed, s
 - the samples load without blocking startup, and the fallback works with them missing;
 - `dev`, `build` and `lint` pass, and the sim is unaffected.
 
+✅ **Done:** the motor is now seven looped recordings of real EVs (173 kB of mono MP3), with the synth motor as the stand-in until they load and the fallback if they don't. Decided at the start: free EV recordings are scarce, so the loops come from two CC0 Freesound clips, and what no clip had clean (the gear whine, the regen tone) stays synthesized.
+
+- **Sources** (`assets/audio/LICENSE.txt`, `DRIVETRAIN_SOUND_CREDITS` in `src/config/assets.ts`):
+  - a Tesla Model S Plaid full-throttle launch (justVova) for the on-load bands and boost's surge;
+  - a BMW i3 cruising at 60–100 km/h (tferrino) for the off-load bands and road rumble.
+  - The raw recordings aren't committed; the build downloads Freesound's public previews into a git-ignored cache.
+- **Build** (`scripts/build-audio.ts`, `npm run audio:build` / `make audio`, needs ffmpeg):
+  - The Plaid's motor tone is tracked along a guide (about 64 Hz per m/s, 0.7–1.4 % off a quadratic fit) and each stretch resampled so the tone holds still. The held pitch gives each loop its reference speed, so pitch matches across a band change.
+  - Each loop's tail is crossfaded into its head, and 0.1 s of each end is wrapped around it in the file, so an MP3 decoder's start delay can't put a click at the loop point. Seams measure under one typical sample step.
+  - Every loop is normalised to −20 dBFS RMS, and the build writes `src/audio/drivetrainSamples.ts` (loop points, reference speeds).
+- **Playback** (`src/audio/drivetrain.ts`, `TUNING.audio.drivetrain`, panel folder _Drivetrain sound_):
+  - Motor speed picks the band: on-load at 6 / 17 / 30 m/s, off-load at 17 / 30 (no clean low-speed coast in the recordings), with equal-power crossfades. `playbackRate` is motor speed over the reference speed.
+  - Throttle crossfades off-load to on-load and opens a low-pass from 1.4 to 9 kHz.
+  - Braking or lifting off brings in a synth regen tone; a synth gear whine follows speed. Rumble follows the wheels and goes quiet in the air.
+  - In the air the motor spins up with any throttle (to 42 m/s) and drops back on landing. Boost adds the surge loop.
+  - The loops are fetched once, after the first gesture.
+- **Landing** (asked for in the session, after it sounded like a bouncing ball): `sfx.landing` drops M14's falling sine (110 → 38 Hz). It's now the suspension bottoming out front, then rear 75 ms later, each a low-passed noise thud over a 62 Hz knock with almost no pitch drop. A mid-band body clunk, three inharmonic panel modes and a short rattle sit on top. A roof or side landing is one heavier hit with more metal. Peaks match the old sound; it's about 3 dB less boomy.
+- **Mix:** measured on the car bus in the browser. Under throttle it's within about 2 dB of the old synth motor, and near silent at rest, as an EV is. The other car sounds are unchanged.
+
+Checked in the dev server (Claude's browser): no fetches before the first gesture, then all seven loops, with no console errors. A scripted drive (launch, coast, brake, boost, jets lift-off with throttle) read the layer gains and rates: band gains are equal-power, and pitch matches at a band change (840 Hz from both loops at 13 m/s). With the fetches failing, one warning is logged and the synth motor stays. The listening pass is by ear, outside the automated checks (see _Notes / ideas_). Sim output identical to M16.8. `lint`, `build` and `format:check` pass. `index` +1.6 kB gzip (`docs/performance.md`).
+
 ### M17 — More levels & game modes
 
 - 2–4 more levels.
@@ -812,8 +833,9 @@ Park later ideas here instead of building them early.
 - Dust, tyre smoke and tire marks look the same on every surface (grass, road, platforms); M16.6 only tints dust and smoke per level (grey at night). Per-surface colours and grip belong with surface types (M17). Marks are drawn on any ground the wheels touch, including ramps.
 - The chase cam keeps easing towards its target while paused (since M2), so the first moments of a pause still move slightly; the VFX, shake and FOV freeze.
 - Volume is set in the Settings sheet (mouse, or left / right on a focused slider in 10 % steps since M16.8) or muted with M; finer steps and the other settings belong to the M18 settings menu. Gamepad presses don't count as a user gesture in browsers, so a pad-only player has to click or press a key once before there is sound.
-- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and second motor oscillator. Sounds are the same on every surface; tyre and landing sounds per surface type go with surface types (M17). Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
+- Audio has no quality setting: on low (M18) the music could drop its pad (6 saws per bar) and the car its wind and the synth regen and gear whine. Sounds are the same on every surface; tyre and landing sounds per surface type go with surface types (M17). Sounds aren't positional (one listener, the car is always the source); ghosts or other cars would need `PannerNode`s.
 - The mix was tuned by measuring levels in a headless browser, not by ear; give it a listening pass with the tuning panel's _Audio mix_ folder (M19).
+- Drivetrain (M16.9): the on-load loops are short (0.7 s for the low and mid bands, cut from a 5 s launch), so a long steady pull may sound looped. Longer or cleaner recordings (a steady-throttle EV run, an isolated gear whine or regen) could replace any layer by editing `LAYERS` in `scripts/build-audio.ts`. The i3 clips' reference speeds come from the recording's description (60–100 km/h), not a measurement.
 - Handling (M15) was tuned with the headless sim (`npm run sim:car`) plus a short playtest. The sim's drivers are crude (a P-controller on slide angle), so its numbers say "can be caught" or "can be held", not how it feels. Re-run it after level or tuning changes (M16.x/M17), since the void ring and the 80 m gap are sized to the glide.
 - Assists are two fixed presets; the M18 settings menu could expose them one by one (e.g. counter-steer off with drift hold on). Holding full lock after a handbrake on Beginner turns a tight donut. On Pro it spins, unless you counter-steer.
 - Drifts have no sound of their own beyond the tyre squeal, and no score; drift scoring could be an M17 mode.
