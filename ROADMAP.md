@@ -40,6 +40,7 @@ A browser driving game featuring a Roadster-style car that can boost, hop and gl
 | 16.5 | Reveal: stunt run mode         | 3 · Details | ☑      |
 | 16.6 | Reveal: night facility art     | 3 · Details | ☑      |
 | 16.7 | Interface redesign             | 3 · Details | ☑      |
+| 16.8 | Gauge HUD & menu polish        | 3 · Details | ☐      |
 | 17   | More levels & game modes       | 3 · Details | ☐      |
 | 18   | Performance, mobile & settings | 3 · Details | ☐      |
 | 19   | Release polish                 | 3 · Details | ☐      |
@@ -178,7 +179,7 @@ Goal: a complete, shippable loop (start → play → result → retry) that stil
 
 ## Phase 3 — Details & polish
 
-Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order). M16.7 is independent of the reveal and was done before M16.6.
+Each milestone here is independent enough to do in any order, apart from M11 → M12 → M13 and M16.1 → M16.6 (in order). M16.7 is independent of the reveal and was done before M16.6; M16.8 builds on M16.7.
 
 ### M11 — Hero Roadster model
 
@@ -664,6 +665,28 @@ Independent of the reveal; done before M16.6. The HTML overlay still looked like
 
 Checked in the browser pane at 1440 × 900, at the pane's own size and at 375 × 812: the main menu by L, N, T and → (labels, segments and swatches follow, nothing takes focus); a run with the HUD (boost turns the fuel meter amber); the reveal objective at steps 2 and 5 with the hold meter, key caps and popups, the reveal results with a medal and "New best", and the pause dialog (states set through the stores); both fonts loaded; no console errors. `lint`, `build` and `format:check` pass. Gameplay code is unchanged, so the sim wasn't re-run.
 
+### M16.8 — Gauge HUD & menu polish
+
+M16.7 gave the overlay a consistent look, but it still reads as a dashboard of cards: the speed is a number in a rectangle, the main menu is a long form, and the controls are a plain two-column list. Rework the HUD, menus and controls into a clean, modern game interface, closer to racing games than to a web app. Presentation only, like M16.7: stores, bindings, gameplay and the focus rules stay as they are (key remapping is M19, touch layouts M18).
+
+- **Circular speedometer:** replace the speed card with a round gauge bottom-right, drawn in SVG:
+  - a sweeping arc with tick marks and labels (0 to the car's top speed, with a boost zone at the end), and the speed in large mono digits in the centre with its unit;
+  - the arc fills smoothly with speed (eased, never jumpy) and glows in the accent while boosting;
+  - fuel as a thin arc of its own round the gauge (amber while draining, coral when empty), and the fans' suction as a second inner arc while they're engaged;
+  - status (Grounded, Drifting, Airborne, Gliding, Overturned, Wall/Ceiling hold, Jets) as a small label inside or under the gauge, not a row of dots;
+  - Height / Vertical / Roll as a compact readout beside the gauge while airborne, with a small attitude indicator for the roll.
+- **Run HUD:** the timer, rings or points and the reveal run's step track re-laid out to match the gauge: lighter panels (or none), clear hierarchy, motion on changes (ring passed, step done, points added) and popups that slide rather than just fade.
+- **Main menu:** a clearer structure than one scrolling sidebar:
+  - a big "Play" focal point with the chosen level and mode as cards (name, a short description, best time or score and medal);
+  - car paint and assists in their own compact group, sound tucked into a settings section;
+  - no scrolling at 1280 × 720, and nothing cut off down to 960 × 540.
+- **Controls:** redesign the controls card into a proper reference: actions grouped (Drive, Air, Stunts, Race), key caps and gamepad glyphs drawn as icons rather than text, a keyboard / gamepad switch that follows the last-used device, and the same groups reachable from the pause menu.
+- **Pause and results:** the same visual language as the new menu; the results count their numbers up and reveal the breakdown line by line (fade-only under `prefers-reduced-motion`).
+- **Menu navigation by d-pad / stick** with a visible focus ring (from the gamepad note), so a pad-only player can use every menu without the mouse.
+- **Consistency:** extend the tokens and shared pieces in `theme.css` / `components.tsx` (gauge, cards, groups, glyphs) rather than one-off styles; check every state at 1440 × 900, 1280 × 720 and 960 × 540.
+
+**Done when:** the speed shows on a round gauge that reads at a glance, the main menu, controls, pause and results look like one polished modern game UI, everything works by keyboard, pad (including d-pad navigation) and mouse, and `dev`, `build` and `lint` pass.
+
 ### M17 — More levels & game modes
 
 - 2–4 more levels.
@@ -713,7 +736,7 @@ Park later ideas here instead of building them early.
 - M12 split the hero model's materials by texture region in the build script. Paint colours are a plain list (`src/config/paints.ts`); M17 unlockables can add a locked flag and more entries (pearl/metallic flake, matte would need their own roughness/metalness per paint).
 - The Test Track's sky HDRI is only used for lighting and reflections; its background is still the flat sky colour. M16.6 gave the Proving Ground a shader night sky as background and environment instead; the Test Track can get the same treatment when it gets art (M17). The HDRI's sun is within 5° of `SUN_OFFSET`; keep them together.
 - The main menu is a left sidebar since M16.7, so the car shows beside it; a garage/showroom view (camera orbiting the car beside the menu) would show paints off better — M17 with the level select, or M19.
-- UI (M16.7): the HUD is still mouse-transparent and the menus have no d-pad focus navigation (see the gamepad note); the fonts come from Fontshare at runtime, so an offline build falls back to system-ui; the results dialog doesn't animate its numbers; touch layouts are M18.
+- UI (M16.7): the HUD is still mouse-transparent and the menus have no d-pad focus navigation (see the gamepad note; planned for M16.8); the fonts come from Fontshare at runtime, so an offline build falls back to system-ui; the results dialog doesn't animate its numbers (M16.8); touch layouts are M18.
 - Shaded faces of the greybox are dark now that the ambient light is gone (only the sky HDRI fills them); the Test Track still looks like this (M17 art).
 - `postprocessing` 6.39 declares `three <0.187`; bumping three past 0.186 needs a matching postprocessing release.
 - Post-processing and particles have no quality setting: on low (M18) run bloom at half resolution, drop the speed blur, and shrink the particle pools. The full-screen passes' GPU cost at large canvases isn't measured yet (the M13 runs were 1280×800 at vsync).
